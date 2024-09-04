@@ -234,7 +234,7 @@ function animate(composer) {
     const delta = clock.getDelta();
     if (mixer) mixer.update(delta);
     if (character && characterBoundingBox) {
-        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana));
+        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana), animationsMap);
     }
 
     spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
@@ -248,8 +248,6 @@ function animate(composer) {
     requestAnimationFrame(() => animate(composer));
 }
 
-
-
 function checkStairwayProximity() {
     if (!stairsPosition || !character) return;
 
@@ -262,7 +260,6 @@ function checkStairwayProximity() {
         showStairsPrompt(false);
     }
 }
-
 
 function loadNextLevel() {
     currentLevel += 1;
@@ -425,33 +422,45 @@ const config = {
 
     floorTexturePath: '/textures/stones-2.png',
     floorNormalMapPath: '/textures/stones-2-normal.png',
+    floorDisplacementMapPath: '/textures/stones-2-disp.png',
     floorTextureRepeat: { x: 3, y: 3 },
     floorNormalStrength: 1.0, // Strength control for floor normal
+    floorDisplacementScale: 0.2, // Displacement scale for the floor
 
-    ceilingTexturePath: '/textures/planks-2.png',
-    ceilingNormalMapPath: '/textures/planks-2-normal.png',
+    ceilingTexturePath: '/textures/wall-1.png',
+    ceilingNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingTextureRepeat: { x: 1, y: 1 },
     ceilingNormalStrength: 0.5, // Strength control for ceiling normal
+    ceilingDisplacementScale: 0.1, // Displacement scale for the ceiling
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
+    wallDisplacementMapPath: '/textures/planks-1-disp.png',
     wallTextureRepeat: { x: 1, y: 1 },
     wallNormalStrength: 0.7, // Strength control for wall normal
+    wallDisplacementScale: 0.15, // Displacement scale for the walls
 
     verticalBeamTexturePath: '/textures/wall-1.png',
     verticalBeamNormalMapPath: '/textures/wall-1-normal.png',
+    verticalBeamDisplacementMapPath: '/textures/wall-1-disp.png',
     verticalBeamTextureRepeat: { x: 1, y: 1 },
     verticalBeamNormalStrength: 0.8, // Strength control for vertical beams
+    verticalBeamDisplacementScale: 0.1, // Displacement scale for vertical beams
 
-    ceilingBeamTexturePath: '/textures/beam.png',
-    ceilingBeamNormalMapPath: '/textures/beam-normal.png',
+    ceilingBeamTexturePath: '/textures/wall-1.png',
+    ceilingBeamNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingBeamDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingBeamTextureRepeat: { x: 2, y: 2 },
     ceilingBeamNormalStrength: 0.6, // Strength control for ceiling beams
+    ceilingBeamDisplacementScale: 0.05, // Displacement scale for ceiling beams
 
     columnTexturePath: '/textures/wood-1.png',
     columnNormalMapPath: '/textures/wood-1-normal.png',
+    columnDisplacementMapPath: '/textures/wood-1-disp.png',
     columnTextureRepeat: { x: 1, y: 1 },
     columnNormalStrength: 0.9, // Strength control for columns
+    columnDisplacementScale: 0.2, // Displacement scale for columns
 
     potionModelPath: '/glb/Mana_small_Potion.glb',
 
@@ -535,6 +544,7 @@ function createCeiling(scene, collidableObjects, gridCols, gridRows) {
     const textureLoader = new THREE.TextureLoader();
     const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
     const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
+    const ceilingDisplacementMap = textureLoader.load(config.ceilingDisplacementMapPath);
 
     ceilingTexture.wrapS = THREE.RepeatWrapping;
     ceilingTexture.wrapT = THREE.RepeatWrapping;
@@ -544,10 +554,16 @@ function createCeiling(scene, collidableObjects, gridCols, gridRows) {
     ceilingNormalMap.wrapT = THREE.RepeatWrapping;
     ceilingNormalMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
 
+    ceilingDisplacementMap.wrapS = THREE.RepeatWrapping;
+    ceilingDisplacementMap.wrapT = THREE.RepeatWrapping;
+    ceilingDisplacementMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
     const ceilingMaterial = new THREE.MeshPhongMaterial({
         map: ceilingTexture,
         normalMap: ceilingNormalMap,
         normalScale: new THREE.Vector2(config.ceilingNormalStrength, config.ceilingNormalStrength),
+        displacementMap: ceilingDisplacementMap,
+        displacementScale: config.ceilingDisplacementScale,
     });
 
     const ceilingGeometry = new THREE.PlaneGeometry(gridCols * cellSize, gridRows * cellSize);
@@ -624,6 +640,7 @@ function createMazeGeometry(scene, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const wallTexture = textureLoader.load(config.wallTexturePath);
     const wallNormalMap = textureLoader.load(config.wallNormalMapPath);
+    const wallDisplacementMap = textureLoader.load(config.wallDisplacementMapPath);
 
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
@@ -633,14 +650,22 @@ function createMazeGeometry(scene, collidableObjects) {
     wallNormalMap.wrapT = THREE.RepeatWrapping;
     wallNormalMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
 
+    wallDisplacementMap.wrapS = THREE.RepeatWrapping;
+    wallDisplacementMap.wrapT = THREE.RepeatWrapping;
+    wallDisplacementMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
+
     const wallMaterial = new THREE.MeshPhongMaterial({
         map: wallTexture,
         normalMap: wallNormalMap,
         normalScale: new THREE.Vector2(config.wallNormalStrength, config.wallNormalStrength),
+        displacementMap: wallDisplacementMap,
+        displacementScale: config.wallDisplacementScale,
     });
 
     const floorTexture = textureLoader.load(config.floorTexturePath);
     const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
+    const floorDisplacementMap = textureLoader.load(config.floorDisplacementMapPath);
+    
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
@@ -649,10 +674,16 @@ function createMazeGeometry(scene, collidableObjects) {
     floorNormalMap.wrapT = THREE.RepeatWrapping;
     floorNormalMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
 
+    floorDisplacementMap.wrapS = THREE.RepeatWrapping;
+    floorDisplacementMap.wrapT = THREE.RepeatWrapping;
+    floorDisplacementMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+
     const floorMaterial = new THREE.MeshPhongMaterial({
         map: floorTexture,
         normalMap: floorNormalMap,
         normalScale: new THREE.Vector2(config.floorNormalStrength, config.floorNormalStrength),
+        displacementMap: floorDisplacementMap,
+        displacementScale: config.floorDisplacementScale,
     });
 
     for (let row = 0; row < config.gridRows; row++) {
@@ -707,6 +738,7 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const beamTexture = textureLoader.load(config.verticalBeamTexturePath);
     const beamNormalMap = textureLoader.load(config.verticalBeamNormalMapPath);
+    const beamDisplacementMap = textureLoader.load(config.verticalBeamDisplacementMapPath);
 
     const beamHeight = config.wallHeight + 1;
 
@@ -718,6 +750,10 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
     beamNormalMap.wrapT = THREE.RepeatWrapping;
     beamNormalMap.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
 
+    beamDisplacementMap.wrapS = THREE.RepeatWrapping;
+    beamDisplacementMap.wrapT = THREE.RepeatWrapping;
+    beamDisplacementMap.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
+
     const beamWidth = config.wallThickness + 0.3;
     const beamDepth = config.wallThickness + 0.3;
 
@@ -726,6 +762,8 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
         map: beamTexture,
         normalMap: beamNormalMap,
         normalScale: new THREE.Vector2(config.verticalBeamNormalStrength, config.verticalBeamNormalStrength),
+        displacementMap: beamDisplacementMap,
+        displacementScale: config.verticalBeamDisplacementScale,
     });
 
     const beam = new THREE.Mesh(beamGeometry, beamMaterial);
@@ -739,6 +777,7 @@ function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const beamTexture = textureLoader.load(config.ceilingBeamTexturePath);
     const beamNormalMap = textureLoader.load(config.ceilingBeamNormalMapPath);
+    const beamDisplacementMap = textureLoader.load(config.ceilingBeamDisplacementMapPath);
 
     beamTexture.wrapS = THREE.RepeatWrapping;
     beamTexture.wrapT = THREE.RepeatWrapping;
@@ -748,11 +787,17 @@ function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
     beamNormalMap.wrapT = THREE.RepeatWrapping;
     beamNormalMap.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
 
+    beamDisplacementMap.wrapS = THREE.RepeatWrapping;
+    beamDisplacementMap.wrapT = THREE.RepeatWrapping;
+    beamDisplacementMap.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
+
     const beamGeometry = new THREE.BoxGeometry(width, config.wallThickness, depth);
     const beamMaterial = new THREE.MeshPhongMaterial({
         map: beamTexture,
         normalMap: beamNormalMap,
         normalScale: new THREE.Vector2(config.ceilingBeamNormalStrength, config.ceilingBeamNormalStrength),
+        displacementMap: beamDisplacementMap,
+        displacementScale: config.ceilingBeamDisplacementScale,
     });
 
     const offset = config.wallThickness / 2 + 0.01;
@@ -796,6 +841,7 @@ function placeStairway(scene, collidableObjects, character) {
     const textureLoader = new THREE.TextureLoader();
     const columnTexture = textureLoader.load(config.columnTexturePath);
     const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
+    const columnDisplacementMap = textureLoader.load(config.columnDisplacementMapPath);
 
     columnTexture.wrapS = THREE.RepeatWrapping;
     columnTexture.wrapT = THREE.RepeatWrapping;
@@ -805,7 +851,17 @@ function placeStairway(scene, collidableObjects, character) {
     columnNormalMap.wrapT = THREE.RepeatWrapping;
     columnNormalMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
 
-    const columnMaterial = new THREE.MeshPhongMaterial({ map: columnTexture, normalMap: columnNormalMap });
+    columnDisplacementMap.wrapS = THREE.RepeatWrapping;
+    columnDisplacementMap.wrapT = THREE.RepeatWrapping;
+    columnDisplacementMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
+
+    const columnMaterial = new THREE.MeshPhongMaterial({
+        map: columnTexture,
+        normalMap: columnNormalMap,
+        displacementMap: columnDisplacementMap,
+        displacementScale: config.columnDisplacementScale,
+    });
+
     const column = new THREE.Mesh(columnGeometry, columnMaterial);
     column.position.set(x, 3, z);
     scene.add(column);
@@ -1041,6 +1097,7 @@ const BLOOM_SCENE = 1;
 export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana, animationsMap) {
     if (!character || !characterBoundingBox) return;
 
+    // Handle gravity and jumping logic
     if (isJumping || velocityY !== 0) {
         velocityY += gravity * delta;
         const verticalMove = new THREE.Vector3(0, velocityY * delta, 0);
@@ -1059,63 +1116,73 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
         }
     }
 
-    const targetSpeed = keysPressed['shift'] ? runSpeed : walkSpeed;
+    // Determine speed based on the direction of movement
+    let targetSpeed = walkSpeed; // Default to walking speed
+    if (keysPressed['z'] && keysPressed['shift']) { // Run forward if 'shift' is pressed with forward key 'z'
+        targetSpeed = runSpeed;
+    }
+
     currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
 
     let isMoving = false;
     let direction = new THREE.Vector3();
 
-    if (keysPressed['z']) {
+    // Handle movement in different directions
+    if (keysPressed['z']) { // Move forward
         direction.z += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['s']) {
-        direction.z -= currentSpeed * delta;
+    if (keysPressed['s']) { // Move backward (only walking, no running)
+        direction.z -= walkSpeed * delta; // Backward movement is restricted to walking speed, regardless of shift key
         isMoving = true;
     }
-    if (keysPressed['q']) {
+    if (keysPressed['q']) { // Strafe left
         direction.x += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['d']) {
+    if (keysPressed['d']) { // Strafe right
         direction.x -= currentSpeed * delta;
         isMoving = true;
     }
 
+    // Apply character rotation to movement direction
     direction.applyQuaternion(character.quaternion);
 
+    // Move character if there are no collisions
     if (!checkCollisions(direction, collidableObjects, characterBoundingBox)) {
         character.position.add(direction);
     }
 
     characterBoundingBox.updateMatrixWorld();
 
+    // Animation handling logic
     if (!isJumping) {
-        let walkAction = animationsMap.get('walking'); // Assuming 'walking' is the walking animation
+        let walkAction = animationsMap.get('walking'); // Assume 'walking' is the name of the walking animation
 
         if (isMoving) {
-            if (keysPressed['shift']) {
+            if (keysPressed['z'] && keysPressed['shift']) { // Running forward
                 setAction('running');
-                if (walkAction) walkAction.timeScale = 1; // Normal playback speed for running
-            } else if (keysPressed['s']) { // Walking backward
+                if (walkAction) walkAction.timeScale = 1; // Normal forward playback speed
+            } else if (keysPressed['s']) { // Walking backward (disable running, enforce walking)
                 setAction('walking');
                 if (walkAction) walkAction.timeScale = -1; // Reverse the walk animation
-            } else {
+            } else { // Walking forward or strafing
                 setAction('walking');
-                if (walkAction) walkAction.timeScale = 1; // Normal forward walk animation
+                if (walkAction) walkAction.timeScale = 1; // Normal forward playback
             }
-        } else {
+        } else { // Not moving, set idle action
             setAction('idle');
-            if (walkAction) walkAction.timeScale = 1; // Reset to normal speed in idle
+            if (walkAction) walkAction.timeScale = 1; // Ensure animation is reset to forward speed for future use
         }
     }
 
+    // Update the camera position relative to the character
     updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
 
+    // Mana regeneration over time
     mana = Math.min(mana + manaRegenRate * delta, maxMana);
     updateMana(mana / maxMana);
 }
-
 
 export function initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed) {
     if (!isJumping && character) {

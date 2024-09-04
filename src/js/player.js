@@ -16,9 +16,10 @@ const manaRegenRate = 10;
 const spellCost = 10;
 const BLOOM_SCENE = 1;
 
-export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana) {
+export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana, animationsMap) {
     if (!character || !characterBoundingBox) return;
 
+    // Handle gravity and jumping logic
     if (isJumping || velocityY !== 0) {
         velocityY += gravity * delta;
         const verticalMove = new THREE.Vector3(0, velocityY * delta, 0);
@@ -37,51 +38,70 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
         }
     }
 
-    const targetSpeed = keysPressed['shift'] ? runSpeed : walkSpeed;
+    // Determine speed based on the direction of movement
+    let targetSpeed = walkSpeed; // Default to walking speed
+    if (keysPressed['z'] && keysPressed['shift']) { // Run forward if 'shift' is pressed with forward key 'z'
+        targetSpeed = runSpeed;
+    }
+
     currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
 
     let isMoving = false;
     let direction = new THREE.Vector3();
 
-    if (keysPressed['z']) {
+    // Handle movement in different directions
+    if (keysPressed['z']) { // Move forward
         direction.z += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['s']) {
-        direction.z -= currentSpeed * delta;
+    if (keysPressed['s']) { // Move backward (only walking, no running)
+        direction.z -= walkSpeed * delta; // Backward movement is restricted to walking speed, regardless of shift key
         isMoving = true;
     }
-    if (keysPressed['q']) {
+    if (keysPressed['q']) { // Strafe left
         direction.x += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['d']) {
+    if (keysPressed['d']) { // Strafe right
         direction.x -= currentSpeed * delta;
         isMoving = true;
     }
 
+    // Apply character rotation to movement direction
     direction.applyQuaternion(character.quaternion);
 
+    // Move character if there are no collisions
     if (!checkCollisions(direction, collidableObjects, characterBoundingBox)) {
         character.position.add(direction);
     }
 
     characterBoundingBox.updateMatrixWorld();
 
+    // Animation handling logic
     if (!isJumping) {
+        let walkAction = animationsMap.get('walking'); // Assume 'walking' is the name of the walking animation
+
         if (isMoving) {
-            if (keysPressed['shift']) {
+            if (keysPressed['z'] && keysPressed['shift']) { // Running forward
                 setAction('running');
-            } else {
+                if (walkAction) walkAction.timeScale = 1; // Normal forward playback speed
+            } else if (keysPressed['s']) { // Walking backward (disable running, enforce walking)
                 setAction('walking');
+                if (walkAction) walkAction.timeScale = -1; // Reverse the walk animation
+            } else { // Walking forward or strafing
+                setAction('walking');
+                if (walkAction) walkAction.timeScale = 1; // Normal forward playback
             }
-        } else {
+        } else { // Not moving, set idle action
             setAction('idle');
+            if (walkAction) walkAction.timeScale = 1; // Ensure animation is reset to forward speed for future use
         }
     }
 
+    // Update the camera position relative to the character
     updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
 
+    // Mana regeneration over time
     mana = Math.min(mana + manaRegenRate * delta, maxMana);
     updateMana(mana / maxMana);
 }

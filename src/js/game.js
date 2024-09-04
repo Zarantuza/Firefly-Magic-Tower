@@ -204,7 +204,7 @@ function animate(composer) {
     const delta = clock.getDelta();
     if (mixer) mixer.update(delta);
     if (character && characterBoundingBox) {
-        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana));
+        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana), animationsMap);
     }
 
     spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
@@ -218,8 +218,6 @@ function animate(composer) {
     requestAnimationFrame(() => animate(composer));
 }
 
-
-
 function checkStairwayProximity() {
     if (!stairsPosition || !character) return;
 
@@ -232,7 +230,6 @@ function checkStairwayProximity() {
         showStairsPrompt(false);
     }
 }
-
 
 function loadNextLevel() {
     currentLevel += 1;

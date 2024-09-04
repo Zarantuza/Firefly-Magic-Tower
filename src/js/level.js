@@ -16,33 +16,45 @@ const config = {
 
     floorTexturePath: '/textures/stones-2.png',
     floorNormalMapPath: '/textures/stones-2-normal.png',
+    floorDisplacementMapPath: '/textures/stones-2-disp.png',
     floorTextureRepeat: { x: 3, y: 3 },
-    floorNormalStrength: 1.0, // Strength control for floor normal
+    floorNormalStrength: 1, // Strength control for floor normal
+    floorDisplacementScale: 0.05, // Displacement scale for the floor
 
     ceilingTexturePath: '/textures/wall-1.png',
     ceilingNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingTextureRepeat: { x: 1, y: 1 },
     ceilingNormalStrength: 0.5, // Strength control for ceiling normal
+    ceilingDisplacementScale: 0.1, // Displacement scale for the ceiling
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
+    wallDisplacementMapPath: '/textures/planks-1-disp.png',
     wallTextureRepeat: { x: 1, y: 1 },
     wallNormalStrength: 0.7, // Strength control for wall normal
+    wallDisplacementScale: 0.15, // Displacement scale for the walls
 
     verticalBeamTexturePath: '/textures/wall-1.png',
     verticalBeamNormalMapPath: '/textures/wall-1-normal.png',
+    verticalBeamDisplacementMapPath: '/textures/wall-1-disp.png',
     verticalBeamTextureRepeat: { x: 1, y: 1 },
     verticalBeamNormalStrength: 0.8, // Strength control for vertical beams
+    verticalBeamDisplacementScale: 0.1, // Displacement scale for vertical beams
 
     ceilingBeamTexturePath: '/textures/wall-1.png',
     ceilingBeamNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingBeamDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingBeamTextureRepeat: { x: 2, y: 2 },
     ceilingBeamNormalStrength: 0.6, // Strength control for ceiling beams
+    ceilingBeamDisplacementScale: 0.05, // Displacement scale for ceiling beams
 
     columnTexturePath: '/textures/wood-1.png',
     columnNormalMapPath: '/textures/wood-1-normal.png',
+    columnDisplacementMapPath: '/textures/wood-1-disp.png',
     columnTextureRepeat: { x: 1, y: 1 },
     columnNormalStrength: 0.9, // Strength control for columns
+    columnDisplacementScale: 0.2, // Displacement scale for columns
 
     potionModelPath: '/glb/Mana_small_Potion.glb',
 
@@ -126,6 +138,7 @@ function createCeiling(scene, collidableObjects, gridCols, gridRows) {
     const textureLoader = new THREE.TextureLoader();
     const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
     const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
+    const ceilingDisplacementMap = textureLoader.load(config.ceilingDisplacementMapPath);
 
     ceilingTexture.wrapS = THREE.RepeatWrapping;
     ceilingTexture.wrapT = THREE.RepeatWrapping;
@@ -135,10 +148,16 @@ function createCeiling(scene, collidableObjects, gridCols, gridRows) {
     ceilingNormalMap.wrapT = THREE.RepeatWrapping;
     ceilingNormalMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
 
+    ceilingDisplacementMap.wrapS = THREE.RepeatWrapping;
+    ceilingDisplacementMap.wrapT = THREE.RepeatWrapping;
+    ceilingDisplacementMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
     const ceilingMaterial = new THREE.MeshPhongMaterial({
         map: ceilingTexture,
         normalMap: ceilingNormalMap,
         normalScale: new THREE.Vector2(config.ceilingNormalStrength, config.ceilingNormalStrength),
+        displacementMap: ceilingDisplacementMap,
+        displacementScale: config.ceilingDisplacementScale,
     });
 
     const ceilingGeometry = new THREE.PlaneGeometry(gridCols * cellSize, gridRows * cellSize);
@@ -215,6 +234,7 @@ function createMazeGeometry(scene, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const wallTexture = textureLoader.load(config.wallTexturePath);
     const wallNormalMap = textureLoader.load(config.wallNormalMapPath);
+    const wallDisplacementMap = textureLoader.load(config.wallDisplacementMapPath);
 
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
@@ -224,14 +244,22 @@ function createMazeGeometry(scene, collidableObjects) {
     wallNormalMap.wrapT = THREE.RepeatWrapping;
     wallNormalMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
 
+    wallDisplacementMap.wrapS = THREE.RepeatWrapping;
+    wallDisplacementMap.wrapT = THREE.RepeatWrapping;
+    wallDisplacementMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
+
     const wallMaterial = new THREE.MeshPhongMaterial({
         map: wallTexture,
         normalMap: wallNormalMap,
         normalScale: new THREE.Vector2(config.wallNormalStrength, config.wallNormalStrength),
+        displacementMap: wallDisplacementMap,
+        displacementScale: config.wallDisplacementScale,
     });
 
     const floorTexture = textureLoader.load(config.floorTexturePath);
     const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
+    const floorDisplacementMap = textureLoader.load(config.floorDisplacementMapPath);
+    
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
@@ -240,10 +268,16 @@ function createMazeGeometry(scene, collidableObjects) {
     floorNormalMap.wrapT = THREE.RepeatWrapping;
     floorNormalMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
 
+    floorDisplacementMap.wrapS = THREE.RepeatWrapping;
+    floorDisplacementMap.wrapT = THREE.RepeatWrapping;
+    floorDisplacementMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+
     const floorMaterial = new THREE.MeshPhongMaterial({
         map: floorTexture,
         normalMap: floorNormalMap,
         normalScale: new THREE.Vector2(config.floorNormalStrength, config.floorNormalStrength),
+        displacementMap: floorDisplacementMap,
+        displacementScale: config.floorDisplacementScale,
     });
 
     for (let row = 0; row < config.gridRows; row++) {
@@ -298,6 +332,7 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const beamTexture = textureLoader.load(config.verticalBeamTexturePath);
     const beamNormalMap = textureLoader.load(config.verticalBeamNormalMapPath);
+    const beamDisplacementMap = textureLoader.load(config.verticalBeamDisplacementMapPath);
 
     const beamHeight = config.wallHeight + 1;
 
@@ -309,6 +344,10 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
     beamNormalMap.wrapT = THREE.RepeatWrapping;
     beamNormalMap.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
 
+    beamDisplacementMap.wrapS = THREE.RepeatWrapping;
+    beamDisplacementMap.wrapT = THREE.RepeatWrapping;
+    beamDisplacementMap.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
+
     const beamWidth = config.wallThickness + 0.3;
     const beamDepth = config.wallThickness + 0.3;
 
@@ -317,6 +356,8 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
         map: beamTexture,
         normalMap: beamNormalMap,
         normalScale: new THREE.Vector2(config.verticalBeamNormalStrength, config.verticalBeamNormalStrength),
+        displacementMap: beamDisplacementMap,
+        displacementScale: config.verticalBeamDisplacementScale,
     });
 
     const beam = new THREE.Mesh(beamGeometry, beamMaterial);
@@ -330,6 +371,7 @@ function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
     const beamTexture = textureLoader.load(config.ceilingBeamTexturePath);
     const beamNormalMap = textureLoader.load(config.ceilingBeamNormalMapPath);
+    const beamDisplacementMap = textureLoader.load(config.ceilingBeamDisplacementMapPath);
 
     beamTexture.wrapS = THREE.RepeatWrapping;
     beamTexture.wrapT = THREE.RepeatWrapping;
@@ -339,11 +381,17 @@ function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
     beamNormalMap.wrapT = THREE.RepeatWrapping;
     beamNormalMap.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
 
+    beamDisplacementMap.wrapS = THREE.RepeatWrapping;
+    beamDisplacementMap.wrapT = THREE.RepeatWrapping;
+    beamDisplacementMap.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
+
     const beamGeometry = new THREE.BoxGeometry(width, config.wallThickness, depth);
     const beamMaterial = new THREE.MeshPhongMaterial({
         map: beamTexture,
         normalMap: beamNormalMap,
         normalScale: new THREE.Vector2(config.ceilingBeamNormalStrength, config.ceilingBeamNormalStrength),
+        displacementMap: beamDisplacementMap,
+        displacementScale: config.ceilingBeamDisplacementScale,
     });
 
     const offset = config.wallThickness / 2 + 0.01;
@@ -387,6 +435,7 @@ function placeStairway(scene, collidableObjects, character) {
     const textureLoader = new THREE.TextureLoader();
     const columnTexture = textureLoader.load(config.columnTexturePath);
     const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
+    const columnDisplacementMap = textureLoader.load(config.columnDisplacementMapPath);
 
     columnTexture.wrapS = THREE.RepeatWrapping;
     columnTexture.wrapT = THREE.RepeatWrapping;
@@ -396,7 +445,17 @@ function placeStairway(scene, collidableObjects, character) {
     columnNormalMap.wrapT = THREE.RepeatWrapping;
     columnNormalMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
 
-    const columnMaterial = new THREE.MeshPhongMaterial({ map: columnTexture, normalMap: columnNormalMap });
+    columnDisplacementMap.wrapS = THREE.RepeatWrapping;
+    columnDisplacementMap.wrapT = THREE.RepeatWrapping;
+    columnDisplacementMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
+
+    const columnMaterial = new THREE.MeshPhongMaterial({
+        map: columnTexture,
+        normalMap: columnNormalMap,
+        displacementMap: columnDisplacementMap,
+        displacementScale: config.columnDisplacementScale,
+    });
+
     const column = new THREE.Mesh(columnGeometry, columnMaterial);
     column.position.set(x, 3, z);
     scene.add(column);
