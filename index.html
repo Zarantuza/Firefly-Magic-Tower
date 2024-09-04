@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three.js Wizard Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+        }
+        #mana-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #mana-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #00ffff;
+        }
+        #seed-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        #instructions {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            color: #fff;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="instructions">
+        <strong>Controls:</strong><br />
+        Move: ZQSD<br />
+        Jump: Spacebar<br />
+        Cast Spell: Left Click<br />
+        Switch Spells: 1, 2, 3<br />
+        Rotate Camera: Mouse Move<br />
+        Zoom: Mouse Wheel
+    </div>
+
+    <script type="module" src="/src/js/game.js"></script>
+</body>
+</html>

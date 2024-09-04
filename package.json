@@ -1,0 +1,28 @@
+{
+  "name": "threejs-tps-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cannon": "^0.6.2",
+    "cannon-es": "^0.20.0",
+    "canon.js": "^0.0.1",
+    "seedrandom": "^3.0.5",
+    "stats.js": "^0.17.0",
+    "three": "^0.167.1",
+    "three-csg-ts": "^3.2.0",
+    "troika-three-text": "^0.49.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

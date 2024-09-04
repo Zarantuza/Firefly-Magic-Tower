@@ -1,0 +1,1415 @@
+// collision.js
+import * as THREE from 'three';
+
+export function checkCollisions(direction, collidableObjects, characterBoundingBox) {
+    if (!characterBoundingBox) return null;
+
+    const characterBox = new THREE.Box3().setFromObject(characterBoundingBox);
+    const predictedBox = characterBox.clone().translate(direction);
+
+    for (let i = 0; i < collidableObjects.length; i++) {
+        const obj = collidableObjects[i];
+
+        if (!obj || !obj.geometry || !obj.material) continue;
+
+        const objectBox = new THREE.Box3().setFromObject(obj);
+
+        if (predictedBox.intersectsBox(objectBox)) {
+            if (obj.userData.isCollectible) {
+                obj.userData.collect(); // Trigger the collection
+                return null; // Do not trigger physical reaction to collectible items
+            }
+            return obj; // Return the object involved in the collision
+        }
+    }
+
+    return null; // Return null if no collision occurred
+}
+
+
+// game.js
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { createLevel } from './level.js';
+import { handlePlayerMovement, initiateJump, initiatePunch, shootSpell, updateCameraPosition } from './player.js';
+import { onWindowResize, onMouseMove, onMouseWheel } from './utils.js';
+import { checkCollisions } from './collision.js';
+import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createCollisionBoxToggleButton, createDebugLinesToggleButton, createFireflyCounter, updateFireflyCounter } from './ui.js';
+import Stats from 'stats.js';
+
+let scene, camera, renderer, mixer, clock;
+let keysPressed = {};
+let cameraDistance = 2;
+let cameraPitch = 0;
+let collidableObjects = [];
+let collisionHelpers = [];
+let debugHelpers = [];
+let character = null;
+let characterBoundingBox = null;
+let animationsMap = new Map();
+let currentAction = '';
+let isJumping = false;
+let spellAnimations = [];
+let manaBarElement = null;
+let seedDisplayElement = null;
+let seed = generateRandomSeed();
+let stairsPosition = null;
+let isFPSMode = false;
+let collisionBoxVisible = false;
+let debugLinesVisible = true;
+let mana = 100;
+const maxMana = 100;
+let currentLevel = 1;
+let nearStairs = false;
+let fireflyCount = 49;
+let activeSpell = 'blue'; // Default spell
+let stats;
+let stairsPromptVisible = false;
+let stairsPrompt = null;
+
+const wizardCollisionBoxSize = new THREE.Vector3(0.5, 1, 0.5);
+const wizardCollisionBoxOffset = new THREE.Vector3(0, 0.5, 0);
+const maxCameraDistance = 10;
+const minCameraDistance = 3;
+const stairwayTriggerDistance = 3;
+let verticalCorrection = 0.25;
+let shootSourceHeight = 1.0;
+let minCameraPitch = -Math.PI / 4;
+let maxCameraPitch = Math.PI / 4;
+
+function init() {
+
+    stats = new Stats();
+    stats.showPanel(0); // 0: FPS, 1: ms/frame, 2: memory usage
+    document.body.appendChild(stats.dom);
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 3, -cameraDistance);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const light1 = new THREE.DirectionalLight(0xfff5e1, 0.8);
+    light1.position.set(10, 20, 10);
+    scene.add(light1);
+
+    const light2 = new THREE.DirectionalLight(0xe1f0ff, 0.8);
+    light2.position.set(-10, 20, -10);
+    scene.add(light2);
+
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    scene.add(ambientLight);
+
+    clock = new THREE.Clock();
+
+    const loader = new GLTFLoader();
+    loader.load('/glb/wizardAnimated-v3.glb', (gltf) => {
+        character = gltf.scene;
+        character.position.set(0, 0, 0);
+        character.position.y += 1;
+
+        scene.add(character);
+
+        mixer = new THREE.AnimationMixer(character);
+
+        gltf.animations.forEach((clip) => {
+            const action = mixer.clipAction(clip);
+            animationsMap.set(clip.name.toLowerCase(), action);
+        });
+
+        setAction('idle');
+
+        const boundingBoxGeometry = new THREE.BoxGeometry(
+            wizardCollisionBoxSize.x,
+            wizardCollisionBoxSize.y,
+            wizardCollisionBoxSize.z
+        );
+        const boundingBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, visible: false });
+        characterBoundingBox = new THREE.Mesh(boundingBoxGeometry, boundingBoxMaterial);
+
+        characterBoundingBox.position.copy(wizardCollisionBoxOffset);
+        character.add(characterBoundingBox);
+
+        debugHelpers.push(characterBoundingBox);
+
+        createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly);
+    });
+
+    manaBarElement = createManaBar();
+    seedDisplayElement = createSeedDisplay(seed);
+    createLifeBar();
+    createCollisionBoxToggleButton(toggleCollisionBoxes);
+    createDebugLinesToggleButton(toggleDebugLines);
+    createFireflyCounter(fireflyCount);
+    createStairsPrompt();
+
+    window.addEventListener('resize', () => onWindowResize(camera, renderer));
+
+    document.addEventListener('keydown', (event) => {
+        keysPressed[event.key.toLowerCase()] = true;
+        if (event.key.toLowerCase() === ' ') {
+            initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed);
+        }
+        if (event.key.toLowerCase() === 'enter' && nearStairs) {
+            loadNextLevel();
+        }
+    });
+
+    document.addEventListener('keyup', (event) => {
+        keysPressed[event.key.toLowerCase()] = false;
+        if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !isJumping) {
+            setAction('idle');
+        }
+    });
+
+    document.addEventListener('mousemove', (event) => {
+        if (isFPSMode) {
+            updateCameraRotation(event);
+        } else {
+            onMouseMove(character, cameraPitch, cameraDistance, (char, pitch, distance) => {
+                cameraPitch = pitch;
+                updateCameraPosition(char, pitch, distance, collidableObjects, camera);
+            })(event);
+        }
+    });
+
+    document.addEventListener('wheel', (event) => {
+        cameraDistance += event.deltaY * 0.01;
+        cameraDistance = THREE.MathUtils.clamp(cameraDistance, minCameraDistance, maxCameraDistance);
+        updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
+    });
+
+    document.addEventListener('mousedown', (event) => {
+        if (event.button === 0) {
+            if (fireflyCount >= 5) {
+                initiatePunch(character, mixer, animationsMap, setAction, isJumping);
+                const spellAnimation = shootSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, activeSpell);
+                if (spellAnimation) {
+                    spellAnimations.push(spellAnimation);
+                }
+            }
+        } else if (event.button === 2) {
+            toggleFPSMode(true);
+        }
+    });
+
+    document.addEventListener('mouseup', (event) => {
+        if (event.button === 2) {
+            toggleFPSMode(false);
+        }
+    });
+
+    document.addEventListener('click', () => {
+        renderer.domElement.requestPointerLock();
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === renderer.domElement) {
+            document.addEventListener('mousemove', onMouseMove);
+        } else {
+            document.removeEventListener('mousemove', onMouseMove);
+        }
+    });
+
+    animate();
+}
+
+function animate() {
+    stats.begin(); // Start monitoring FPS
+
+    const delta = clock.getDelta();
+    if (mixer) mixer.update(delta);
+    if (character && characterBoundingBox) {
+        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana));
+    }
+
+    spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
+
+    checkStairwayProximity();
+    checkCollisionsForCollectibles();
+
+    renderer.render(scene, camera);
+
+    stats.end(); // End monitoring FPS
+    requestAnimationFrame(animate);
+}
+
+function checkStairwayProximity() {
+    if (!stairsPosition || !character) return;
+
+    const distanceToStairs = character.position.distanceTo(stairsPosition);
+    if (distanceToStairs < stairwayTriggerDistance) {
+        nearStairs = true;
+        showStairsPrompt(true);
+    } else {
+        nearStairs = false;
+        showStairsPrompt(false);
+    }
+}
+
+
+function loadNextLevel() {
+    currentLevel += 1;
+    seed = generateRandomSeed();
+    updateSeedDisplay(seedDisplayElement, seed);
+    createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly);
+    nearStairs = false;
+    showStairsPrompt(false);
+}
+
+function setAction(actionName) {
+    if (currentAction === actionName) return;
+
+    const action = animationsMap.get(actionName);
+    if (action) {
+        const previousAction = animationsMap.get(currentAction);
+        action.reset().fadeIn(0.5).play();
+        if (previousAction) {
+            previousAction.fadeOut(0.5);
+        }
+        currentAction = actionName;
+    }
+}
+
+function setIsJumping(state) {
+    isJumping = state;
+}
+
+function increaseMana(amount) {
+    mana = Math.min(mana + amount, maxMana);
+    updateManaBar(manaBarElement, mana / maxMana);
+}
+
+function addFirefly() {
+    fireflyCount += 1;
+    updateFireflyCounter(fireflyCount);
+    updateActiveSpell();
+}
+
+function updateActiveSpell() {
+    if (fireflyCount >= 500) {
+        activeSpell = 'red';
+    } else if (fireflyCount >= 50) {
+        activeSpell = 'yellow';
+    } else if (fireflyCount >= 5) {
+        activeSpell = 'blue';
+    } else {
+        activeSpell = null;
+    }
+}
+
+function checkCollisionsForCollectibles() {
+    collidableObjects.forEach((obj) => {
+        if (obj.userData.isCollectible) {
+            const distance = character.position.distanceTo(obj.position);
+            if (distance < 1) {
+                if (typeof obj.userData.collect === 'function') {
+                    obj.userData.collect();
+                }
+            }
+        }
+    });
+}
+
+function updateCameraRotation(event) {
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+
+    camera.rotation.y -= movementX * 0.002;
+    camera.rotation.x -= movementY * 0.002;
+    camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x, minCameraPitch, maxCameraPitch);
+}
+
+function toggleFPSMode(enable) {
+    isFPSMode = enable;
+
+    if (enable) {
+        camera.position.copy(character.position);
+        camera.position.y += shootSourceHeight;
+        character.visible = false;
+    } else {
+        character.visible = true;
+        camera.position.set(0, 3, -cameraDistance);
+    }
+}
+
+function toggleCollisionBoxes() {
+    collisionBoxVisible = !collisionBoxVisible;
+    collisionHelpers.forEach(helper => {
+        helper.visible = collisionBoxVisible;
+    });
+}
+
+function toggleDebugLines() {
+    debugLinesVisible = !debugLinesVisible;
+    debugHelpers.forEach(helper => {
+        helper.visible = debugLinesVisible;
+    });
+}
+
+function generateRandomSeed() {
+    return Math.random().toString(36).substring(2, 15);
+}
+
+let stairsPromptCreated = false;
+
+function createStairsPrompt() {
+    let stairsPrompt = document.getElementById('stairsPrompt');
+
+    if (!stairsPrompt) {
+        stairsPrompt = document.createElement('div');
+        stairsPrompt.id = 'stairsPrompt';
+        stairsPrompt.style.position = 'absolute';
+        stairsPrompt.style.top = '50%';
+        stairsPrompt.style.left = '50%';
+        stairsPrompt.style.transform = 'translate(-50%, -50%)';
+        stairsPrompt.style.color = '#ffffff';
+        stairsPrompt.style.fontSize = '24px';
+        stairsPrompt.style.padding = '10px';
+        stairsPrompt.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        stairsPrompt.style.borderRadius = '5px';
+        stairsPrompt.style.display = 'none';
+        stairsPrompt.innerText = 'Press Enter to go up';
+        document.body.appendChild(stairsPrompt);
+        stairsPromptCreated = true;
+    }
+}
+
+function showStairsPrompt(visible) {
+    if (!stairsPromptCreated) {
+        createStairsPrompt();
+    }
+    const stairsPrompt = document.getElementById('stairsPrompt');
+    
+    if (stairsPrompt && stairsPrompt.style.display !== (visible ? 'block' : 'none')) {
+        stairsPrompt.style.display = visible ? 'block' : 'none';
+    }
+}
+
+export { showStairsPrompt, loadNextLevel };
+init();
+
+
+// level.js
+// level.js
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { fadeToBlack, createRNG } from './utils.js';
+
+import { loadNextLevel } from './game.js'; // Add this import
+
+// Configuration parameters
+const config = {
+    gridRows: 4,
+    gridCols: 4,
+    cellSize: 10,
+    wallHeight: 5,
+    wallThickness: 0.5,
+    numPotions: 5,
+    numFireflies: 10,
+
+    floorTexturePath: '/textures/planks-2.png',
+    floorNormalMapPath: '/textures/planks-2-normal.png',
+
+    ceilingTexturePath: '/textures/planks-2.png',
+    ceilingNormalMapPath: '/textures/planks-2-normal.png',
+
+    wallTexturePath: '/textures/planks-1.png',
+    wallNormalMapPath: '/textures/planks-1-normal.png',
+
+    verticalBeamTexturePath: '/textures/wall-1.png',
+    verticalBeamNormalMapPath: '/textures/wall-1-normal.png',
+
+    ceilingBeamTexturePath: '/textures/beam.png',
+    ceilingBeamNormalMapPath: '/textures/beam-normal.png',
+
+    columnTexturePath: '/textures/wood-1.png',
+    columnNormalMapPath: '/textures/wood-1-normal.png',
+
+    potionModelPath: '/glb/Mana_small_Potion.glb',
+
+    lightIntensity: 0.5,
+    lightColor: 0xFFAA00,
+    ambientLightIntensity: 0.35,
+    shadowMapSize: 1024,
+    floatingObjectSpeedRange: [0.3, 0.9],
+    floatingObjectHeight: 0.5,
+};
+
+let gridRows = config.gridRows;
+let gridCols = config.gridCols;
+const cellSize = config.cellSize;
+
+let maze = [];
+let stairsPosition = { x: 0, z: 0 };
+
+export function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly) {
+    collidableObjects.forEach(obj => disposeObject(obj, scene));
+    collidableObjects.length = 0;
+    collisionHelpers.forEach(helper => disposeObject(helper, scene));
+    collisionHelpers.length = 0;
+    debugHelpers.length = 0;
+
+    generateMaze(gridRows, gridCols, seed);
+    createMazeGeometry(scene, collidableObjects);
+    stairsPosition = placeStairway(scene, collidableObjects, character);
+    createRoof(scene, collidableObjects);
+    createCircularPlatform(scene, collidableObjects);
+    placeManaPotions(scene, collidableObjects, increaseMana);
+    addCastleLights(scene);
+    placeFireflies(scene, collidableObjects, addFirefly);
+
+    fadeToBlack(scene, clock, () => {
+        placePlayer(scene, character, characterBoundingBox);
+    });
+
+    return stairsPosition;
+}
+
+export function placePlayer(scene, character, characterBoundingBox) {
+    if (character && characterBoundingBox) {
+        let spawnPosition = getRandomFreePosition();
+        character.position.set(spawnPosition.x, 1, spawnPosition.z);
+        characterBoundingBox.updateMatrixWorld();
+    } else {
+        console.error("Character or Character BoundingBox is not defined.");
+    }
+}
+
+function getRandomFreePosition() {
+    let freePositions = [];
+
+    // Iterate through the maze grid to collect all possible free positions
+    for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+            const position = { x: col * cellSize + cellSize / 2, z: row * cellSize + cellSize / 2 };
+            if (!isPositionInWall(position)) {
+                freePositions.push(position);
+            }
+        }
+    }
+
+    if (freePositions.length === 0) {
+        console.error("No free positions available!");
+        return { x: cellSize / 2, z: cellSize / 2 }; // Fallback to the center of the first cell
+    }
+
+    // Randomly select a free position
+    const rng = Math.floor(Math.random() * freePositions.length);
+    return freePositions[rng];
+}
+
+function isPositionInWall(position) {
+    const row = Math.floor(position.z / cellSize);
+    const col = Math.floor(position.x / cellSize);
+    const cell = maze[row] && maze[row][col];
+    return !cell || (cell.north && cell.south && cell.east && cell.west);
+}
+
+function createCeiling(scene, collidableObjects, gridCols, gridRows) {
+    const textureLoader = new THREE.TextureLoader();
+    const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
+    const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
+
+    ceilingTexture.wrapS = THREE.RepeatWrapping;
+    ceilingTexture.wrapT = THREE.RepeatWrapping;
+    ceilingTexture.repeat.set(config.gridCols, config.gridRows);
+
+    const ceilingMaterial = new THREE.MeshPhongMaterial({
+        map: ceilingTexture,
+        normalMap: ceilingNormalMap,
+    });
+
+    const ceilingGeometry = new THREE.PlaneGeometry(gridCols * cellSize, gridRows * cellSize);
+    const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+    ceiling.position.set((gridCols * cellSize) / 2, 6, (gridRows * cellSize) / 2);
+    ceiling.rotation.x = -Math.PI / 2; // Inverse of the roof
+    scene.add(ceiling);
+    collidableObjects.push(ceiling);
+}
+
+function generateMaze(rows, cols, seed) {
+    const rng = createRNG(seed);
+
+    maze = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => ({
+            north: true,
+            south: true,
+            east: true,
+            west: true,
+            visited: false,
+        }))
+    );
+
+    const stack = [];
+    let currentCell = { row: 0, col: 0 };
+    maze[currentCell.row][currentCell.col].visited = true;
+    stack.push(currentCell);
+
+    while (stack.length > 0) {
+        const directions = [];
+        if (currentCell.row > 0 && !maze[currentCell.row - 1][currentCell.col].visited) {
+            directions.push("north");
+        }
+        if (currentCell.row < rows - 1 && !maze[currentCell.row + 1][currentCell.col].visited) {
+            directions.push("south");
+        }
+        if (currentCell.col > 0 && !maze[currentCell.row][currentCell.col - 1].visited) {
+            directions.push("west");
+        }
+        if (currentCell.col < cols - 1 && !maze[currentCell.row][currentCell.col + 1].visited) {
+            directions.push("east");
+        }
+
+        if (directions.length > 0) {
+            const direction = directions[Math.floor(rng() * directions.length)];
+
+            if (direction === "north") {
+                maze[currentCell.row][currentCell.col].north = false;
+                maze[currentCell.row - 1][currentCell.col].south = false;
+                currentCell = { row: currentCell.row - 1, col: currentCell.col };
+            } else if (direction === "south") {
+                maze[currentCell.row][currentCell.col].south = false;
+                maze[currentCell.row + 1][currentCell.col].north = false;
+                currentCell = { row: currentCell.row + 1, col: currentCell.col };
+            } else if (direction === "west") {
+                maze[currentCell.row][currentCell.col].west = false;
+                maze[currentCell.row][currentCell.col - 1].east = false;
+                currentCell = { row: currentCell.row, col: currentCell.col - 1 };
+            } else if (direction === "east") {
+                maze[currentCell.row][currentCell.col].east = false;
+                maze[currentCell.row][currentCell.col + 1].west = false;
+                currentCell = { row: currentCell.row, col: currentCell.col + 1 };
+            }
+
+            maze[currentCell.row][currentCell.col].visited = true;
+            stack.push(currentCell);
+        } else {
+            currentCell = stack.pop();
+        }
+    }
+}
+
+function createMazeGeometry(scene, collidableObjects) {
+    const textureLoader = new THREE.TextureLoader();
+    const wallTexture = textureLoader.load(config.wallTexturePath);
+    const wallNormalMap = textureLoader.load(config.wallNormalMapPath);
+
+    wallTexture.wrapS = THREE.RepeatWrapping;
+    wallTexture.wrapT = THREE.RepeatWrapping;
+    wallTexture.repeat.set(1, config.wallHeight / config.cellSize);
+
+    wallNormalMap.wrapS = THREE.RepeatWrapping;
+    wallNormalMap.wrapT = THREE.RepeatWrapping;
+    wallNormalMap.repeat.set(1, config.wallHeight / config.cellSize);
+
+    const wallMaterial = new THREE.MeshPhongMaterial({
+        map: wallTexture,
+        normalMap: wallNormalMap,
+        normalScale: new THREE.Vector2(0.5, 0.5), // Softer shadows
+    });
+
+    const floorTexture = textureLoader.load(config.floorTexturePath);
+    const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(config.gridCols, config.gridRows);
+
+    const floorMaterial = new THREE.MeshPhongMaterial({
+        map: floorTexture,
+        normalMap: floorNormalMap,
+    });
+
+    const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
+    const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
+    ceilingTexture.wrapS = THREE.RepeatWrapping;
+    ceilingTexture.wrapT = THREE.RepeatWrapping;
+    ceilingTexture.repeat.set(config.gridCols, config.gridRows);
+
+    const ceilingMaterial = new THREE.MeshPhongMaterial({
+        map: ceilingTexture,
+        normalMap: ceilingNormalMap,
+    });
+
+    for (let row = 0; row < config.gridRows; row++) {
+        for (let col = 0; col < config.gridCols; col++) {
+            const x = col * config.cellSize;
+            const z = row * config.cellSize;
+
+            createFloorSegment(scene, x, z, collidableObjects, floorMaterial);
+
+            const wallNorth = maze[row][col].north;
+            const wallSouth = maze[row][col].south;
+            const wallWest = maze[row][col].west;
+            const wallEast = maze[row][col].east;
+
+            // Vertical beams at corners
+            if (wallNorth || wallWest) {
+                createVerticalBeam(scene, x, z, collidableObjects);
+            }
+            if (wallNorth || wallEast) {
+                createVerticalBeam(scene, x + config.cellSize, z, collidableObjects);
+            }
+            if (wallSouth || wallWest) {
+                createVerticalBeam(scene, x, z + config.cellSize, collidableObjects);
+            }
+            if (wallSouth || wallEast) {
+                createVerticalBeam(scene, x + config.cellSize, z + config.cellSize, collidableObjects);
+            }
+
+            if (wallNorth) {
+                createWall(scene, x + config.cellSize / 2, config.wallHeight / 2 + 1, z, config.cellSize, config.wallHeight, config.wallThickness, wallMaterial, collidableObjects);
+                createCeilingBeam(scene, x + config.cellSize / 2, config.wallHeight + 1, z, config.cellSize, config.wallThickness, collidableObjects);
+            }
+            if (wallSouth) {
+                createWall(scene, x + config.cellSize / 2, config.wallHeight / 2 + 1, z + config.cellSize, config.cellSize, config.wallHeight, config.wallThickness, wallMaterial, collidableObjects);
+                createCeilingBeam(scene, x + config.cellSize / 2, config.wallHeight + 1, z + config.cellSize, config.cellSize, config.wallThickness, collidableObjects);
+            }
+            if (wallWest) {
+                createWall(scene, x, config.wallHeight / 2 + 1, z + config.cellSize / 2, config.wallThickness, config.wallHeight, config.cellSize, wallMaterial, collidableObjects);
+                createCeilingBeam(scene, x, config.wallHeight + 1, z + config.cellSize / 2, config.wallThickness, config.cellSize, collidableObjects);
+            }
+            if (wallEast) {
+                createWall(scene, x + config.cellSize, config.wallHeight / 2 + 1, z + config.cellSize / 2, config.wallThickness, config.wallHeight, config.cellSize, wallMaterial, collidableObjects);
+                createCeilingBeam(scene, x + config.cellSize, config.wallHeight + 1, z + config.cellSize / 2, config.wallThickness, config.cellSize, collidableObjects);
+            }
+        }
+    }
+    createRoof(scene, collidableObjects);
+    createCeiling(scene, collidableObjects, gridCols, gridRows);
+}
+
+function createVerticalBeam(scene, x, z, collidableObjects) {
+    const textureLoader = new THREE.TextureLoader();
+    const beamTexture = textureLoader.load(config.verticalBeamTexturePath);
+    const beamNormalMap = textureLoader.load(config.verticalBeamNormalMapPath);
+
+    const beamHeight = config.wallHeight + 1;
+
+    // Increase the width and depth to make the beam wider than the wall thickness
+    const beamWidth = config.wallThickness + 0.3;
+    const beamDepth = config.wallThickness + 0.3;
+
+    const beamGeometry = new THREE.BoxGeometry(beamWidth, beamHeight, beamDepth);
+    const beamMaterial = new THREE.MeshPhongMaterial({
+        map: beamTexture,
+        normalMap: beamNormalMap,
+    });
+
+    // Offset to properly cover the corner by centering the beam on both axes
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+    beam.position.set(x, beamHeight / 2 + 1, z);
+
+    scene.add(beam);
+    collidableObjects.push(beam);
+}
+
+function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
+    const textureLoader = new THREE.TextureLoader();
+    const beamTexture = textureLoader.load(config.ceilingBeamTexturePath);
+    const beamNormalMap = textureLoader.load(config.ceilingBeamNormalMapPath);
+
+    const beamGeometry = new THREE.BoxGeometry(width, config.wallThickness, depth);
+    const beamMaterial = new THREE.MeshPhongMaterial({
+        map: beamTexture,
+        normalMap: beamNormalMap,
+    });
+
+    // Slightly offset the beam's position to avoid Z-fighting
+    const offset = config.wallThickness / 2 + 0.01;
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+    beam.position.set(x, y + offset, z);
+
+    scene.add(beam);
+    collidableObjects.push(beam);
+}
+
+function createFloorSegment(scene, x, z, collidableObjects, material) {
+    const floorThickness = 1;
+    const floorGeometry = new THREE.BoxGeometry(config.cellSize, floorThickness, config.cellSize);
+    const floor = new THREE.Mesh(floorGeometry, material);
+    floor.position.set(x + config.cellSize / 2, 1 - floorThickness / 2, z + config.cellSize / 2);
+    scene.add(floor);
+    collidableObjects.push(floor);
+}
+
+function createWall(scene, x, y, z, width, height, depth, material, collidableObjects) {
+    const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+    const wall = new THREE.Mesh(wallGeometry, material);
+    wall.position.set(x, y, z);
+    scene.add(wall);
+    collidableObjects.push(wall);
+}
+
+function placeStairway(scene, collidableObjects, character) {
+    let randomRow, randomCol, x, z;
+    do {
+        randomRow = THREE.MathUtils.randInt(0, config.gridRows - 1);
+        randomCol = THREE.MathUtils.randInt(0, config.gridCols - 1);
+        x = randomCol * config.cellSize + config.cellSize / 2;
+        z = randomRow * config.cellSize + config.cellSize / 2;
+    } while (Math.abs(character.position.x - x) < config.gridCols * config.cellSize / 2 && Math.abs(character.position.z - z) < config.gridRows * config.cellSize / 2);
+
+    stairsPosition.x = x;
+    stairsPosition.z = z;
+
+    const columnGeometry = new THREE.CylinderGeometry(1.5, 1.5, 5, 32);
+    const textureLoader = new THREE.TextureLoader();
+    const columnTexture = textureLoader.load(config.columnTexturePath);
+    const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
+    const columnMaterial = new THREE.MeshPhongMaterial({ map: columnTexture, normalMap: columnNormalMap });
+    const column = new THREE.Mesh(columnGeometry, columnMaterial);
+    column.position.set(x, 3, z);
+    scene.add(column);
+    collidableObjects.push(column);
+
+    const steps = Math.ceil(5 / 0.2);
+    for (let i = 0; i < steps; i++) {
+        const stepGeometry = new THREE.BoxGeometry(1.5, 0.2, 0.5);
+        const step = new THREE.Mesh(stepGeometry, columnMaterial);
+        const angle = (i * 2 * Math.PI) / steps;
+        step.position.set(
+            x + Math.cos(angle) * 1.5,
+            i * 0.2 + 1,
+            z + Math.sin(angle) * 1.5
+        );
+        step.rotation.y = -angle + Math.PI / 2;
+        scene.add(step);
+        collidableObjects.push(step);
+
+        if (i === 0) {
+            step.userData.isFirstStep = true;
+        }
+    }
+
+    const stairwayBoxGeometry = new THREE.BoxGeometry(config.cellSize, 5, config.cellSize);
+    const stairwayBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, visible: false });
+    const stairwayCollisionBox = new THREE.Mesh(stairwayBoxGeometry, stairwayBoxMaterial);
+    stairwayCollisionBox.position.set(x, 2.5, z);
+    scene.add(stairwayCollisionBox);
+    collidableObjects.push(stairwayCollisionBox);
+
+    stairwayCollisionBox.userData = {
+        isCollectible: true,
+        collect: function () {
+            displayStairwayPrompt();
+            document.addEventListener('keydown', onLevelUpKeyPress, { once: true });
+        }
+    };
+
+    return stairsPosition;
+}
+
+function displayStairwayPrompt() {
+    const prompt = document.createElement('div');
+    prompt.innerText = 'Press Enter to go upstairs';
+    prompt.style.position = 'absolute';
+    prompt.style.top = '50%';
+    prompt.style.left = '50%';
+    prompt.style.transform = 'translate(-50%, -50%)';
+    prompt.style.color = '#ffffff';
+    prompt.style.fontFamily = 'Pixelated';
+    prompt.style.fontSize = '24px';
+    document.body.appendChild(prompt);
+
+    setTimeout(() => {
+        document.body.removeChild(prompt);
+    }, 3000);
+}
+
+function onLevelUpKeyPress(event) {
+    if (event.key === 'Enter') {
+        loadNextLevel(); // Ensure this function is defined
+    }
+}
+
+
+function createRoof(scene, collidableObjects) {
+    const roofGeometry = new THREE.PlaneGeometry(config.gridCols * config.cellSize, config.gridRows * config.cellSize);
+    const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.set((config.gridCols * cellSize) / 2, 6, (config.gridRows * cellSize) / 2);
+    roof.rotation.x = Math.PI / 2;
+    scene.add(roof);
+    collidableObjects.push(roof);
+}
+
+function createCircularPlatform(scene, collidableObjects) {
+    const platformGeometry = new THREE.CylinderGeometry(2, 2, 1, 32);
+    const platformMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+    platform.position.set(0, 0.4, 0);
+    scene.add(platform);
+
+    collidableObjects.push(platform);
+}
+
+function disposeObject(obj, scene) {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) obj.material.dispose();
+    scene.remove(obj);
+}
+
+function placeManaPotions(scene, collidableObjects, increaseMana) {
+    const loader = new GLTFLoader();
+    const rng = createRNG(Date.now().toString());
+
+    for (let i = 0; i < config.numPotions; i++) {
+        const randomRow = Math.floor(rng() * config.gridRows);
+        const randomCol = Math.floor(rng() * config.gridCols);
+
+        let x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
+        let z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+
+        while (isPositionInWall({ x, z })) {
+            x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
+            z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+        }
+
+        loader.load(config.potionModelPath, (gltf) => {
+            const potion = gltf.scene;
+            potion.name = `Potion_${i}`;
+            potion.scale.set(0.25, 0.25, 0.25);
+            potion.position.set(x, 1.5, z);
+
+            const light = new THREE.PointLight(0x00ffff, 1, 5);
+            light.position.set(0, 1.5, 0);
+            potion.add(light);
+
+            const floatSpeed = config.floatingObjectSpeedRange[0] + rng() * (config.floatingObjectSpeedRange[1] - config.floatingObjectSpeedRange[0]);
+            const floatHeight = config.floatingObjectHeight;
+
+            potion.userData = {
+                isCollectible: true,
+                collect: function () {
+                    increaseMana(35);
+                    setTimeout(() => {
+                        scene.remove(potion);
+                        collidableObjects.splice(collidableObjects.indexOf(potion), 1);
+                    }, 50);
+                },
+                update: function (delta) {
+                    const time = Date.now() * 0.001 * floatSpeed;
+                    potion.position.y = 1.5 + Math.sin(time) * floatHeight;
+                },
+            };
+
+            scene.add(potion);
+            collidableObjects.push(potion);
+        });
+    }
+}
+
+function addCastleLights(scene) {
+    const lightPositions = [
+        new THREE.Vector3(config.gridCols * config.cellSize / 2, 6, config.gridRows * config.cellSize / 2),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, 6, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 6, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, 6, (config.gridRows * 3) / 4 * config.cellSize),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 6, (config.gridRows * 3) / 4 * config.cellSize)
+    ];
+
+    lightPositions.forEach(pos => {
+        const light = new THREE.PointLight(config.lightColor, config.lightIntensity, 20);
+        light.position.copy(pos);
+        scene.add(light);
+
+        const flickerIntensity = () => {
+            const intensity = config.lightIntensity + Math.random() * 0.5;
+            light.intensity = intensity;
+        };
+        setInterval(flickerIntensity, 500 );
+    });
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
+    scene.add(ambientLight);
+}
+
+function placeFireflies(scene, collidableObjects, addFirefly) {
+    const rng = createRNG(Date.now().toString());
+
+    for (let i = 0; i < config.numFireflies; i++) {
+        const randomRow = Math.floor(rng() * config.gridRows);
+        const randomCol = Math.floor(rng() * config.gridCols);
+
+        let x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
+        let z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+
+        while (isPositionInWall({ x, z })) {
+            x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
+            z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+        }
+
+        const fireflyGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const fireflyMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const firefly = new THREE.Mesh(fireflyGeometry, fireflyMaterial);
+        firefly.position.set(x, 1.5, z);
+        firefly.name = `Firefly_${i}`;
+
+        const light = new THREE.PointLight(0xEEA354, 5, 5);
+        light.position.set(0, 1.5, 0);
+        firefly.add(light);
+
+        const floatSpeed = config.floatingObjectSpeedRange[0] + rng() * (config.floatingObjectSpeedRange[1] - config.floatingObjectSpeedRange[0]);
+        const floatHeight = config.floatingObjectHeight;
+
+        firefly.userData = {
+            isCollectible: true,
+
+            collect: function () {
+                addFirefly();
+                scene.remove(firefly);
+                collidableObjects.splice(collidableObjects.indexOf(firefly), 1);
+            },
+            update: function (delta) {
+                const time = Date.now() * 0.001 * floatSpeed;
+                firefly.position.y = 1.5 + Math.sin(time) * floatHeight;
+            },
+        };
+
+        scene.add(firefly);
+        collidableObjects.push(firefly);
+    }
+}
+
+
+// player.js
+import * as THREE from 'three';
+import { checkCollisions } from './collision.js';
+import { adjustToGroundLevel } from './utils.js';
+import { updateManaBar } from './ui.js';
+
+let velocityY = 0;
+const gravity = -9.8;
+const jumpStrength = 5;
+let walkSpeed = 5;
+let runSpeed = 10;
+let currentSpeed = 0;
+const speedTransitionDuration = 0.5;
+let mana = 100;
+const maxMana = 100;
+const manaRegenRate = 10;
+const spellCost = 10;
+const BLOOM_SCENE = 1;
+
+export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana) {
+    if (!character || !characterBoundingBox) return;
+
+    if (isJumping || velocityY !== 0) {
+        velocityY += gravity * delta;
+        const verticalMove = new THREE.Vector3(0, velocityY * delta, 0);
+
+        if (!checkCollisions(verticalMove, collidableObjects, characterBoundingBox)) {
+            character.position.y += verticalMove.y;
+        } else {
+            if (velocityY < 0) {
+                setIsJumping(false);
+                velocityY = 0;
+                adjustToGroundLevel(character, collidableObjects);
+                setAction('idle');
+            } else {
+                velocityY = 0;
+            }
+        }
+    }
+
+    const targetSpeed = keysPressed['shift'] ? runSpeed : walkSpeed;
+    currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
+
+    let isMoving = false;
+    let direction = new THREE.Vector3();
+
+    if (keysPressed['z']) {
+        direction.z += currentSpeed * delta;
+        isMoving = true;
+    }
+    if (keysPressed['s']) {
+        direction.z -= currentSpeed * delta;
+        isMoving = true;
+    }
+    if (keysPressed['q']) {
+        direction.x += currentSpeed * delta;
+        isMoving = true;
+    }
+    if (keysPressed['d']) {
+        direction.x -= currentSpeed * delta;
+        isMoving = true;
+    }
+
+    direction.applyQuaternion(character.quaternion);
+
+    if (!checkCollisions(direction, collidableObjects, characterBoundingBox)) {
+        character.position.add(direction);
+    }
+
+    characterBoundingBox.updateMatrixWorld();
+
+    if (!isJumping) {
+        if (isMoving) {
+            if (keysPressed['shift']) {
+                setAction('running');
+            } else {
+                setAction('walking');
+            }
+        } else {
+            setAction('idle');
+        }
+    }
+
+    updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
+
+    mana = Math.min(mana + manaRegenRate * delta, maxMana);
+    updateMana(mana / maxMana);
+}
+
+export function initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed) {
+    if (!isJumping && character) {
+        setIsJumping(true);
+        velocityY = jumpStrength;
+        setAction('jumping');
+
+        const jumpAction = animationsMap.get('jumping');
+        setTimeout(() => {
+            setIsJumping(false);
+            if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !keysPressed['d']) {
+                setAction('idle');
+            }
+        }, jumpAction.getClip().duration * 1000);
+    }
+}
+
+export function initiatePunch(character, mixer, animationsMap, setAction, isJumping) {
+    if (!isJumping && character) {
+        setAction('punching');
+    }
+}
+
+export function shootSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, activeSpell) {
+    if (mana < spellCost) {
+        console.warn('Not enough mana to cast spell.');
+        return;
+    }
+
+    mana -= spellCost;
+
+    let sphereGeometry, sphereMaterial, spellLight, spellSpeed, scale;
+
+    if (activeSpell === 'blue') {
+        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, opacity: 0.5, transparent: true });
+        spellSpeed = 10;
+        scale = 1.5;
+    } else if (activeSpell === 'yellow') {
+        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: 0.5, transparent: true });
+        spellSpeed = 15;
+        scale = 10;
+    } else if (activeSpell === 'red') {
+        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true });
+        spellSpeed = 20;
+        scale = 2.0;
+    }
+
+    const spell = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    spell.layers.enable(BLOOM_SCENE);
+
+    spellLight = new THREE.PointLight(sphereMaterial.color.getHex(), 1, 10);
+    spell.add(spellLight);
+
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y += verticalCorrection;
+    spell.position.copy(character.position).add(new THREE.Vector3(0, shootSourceHeight, 0)).add(forward.clone().multiplyScalar(1));
+    spell.velocity = forward.clone().multiplyScalar(spellSpeed);
+
+    scene.add(spell);
+
+    const spellBoxHelper = new THREE.BoxHelper(spell, sphereMaterial.color.getHex());
+
+    debugHelpers.push(spell);
+    debugHelpers.push(spellBoxHelper);
+
+    let collisionOccurred = false;
+    let collisionTime = 0;
+    const spellAnimation = (delta) => {
+        if (!collisionOccurred) {
+            spell.position.add(spell.velocity.clone().multiplyScalar(delta));
+            spellBoxHelper.update();
+
+            if (checkCollisions(spell.velocity.clone().multiplyScalar(delta), collidableObjects, spell)) {
+                collisionOccurred = true;
+                collisionTime = 0;
+                spell.scale.set(scale, scale, scale);
+                spellLight.intensity = 5;
+            }
+        } else {
+            collisionTime += delta;
+            const spellScale = scale * (1 - collisionTime / 0.5);
+            spell.scale.set(spellScale, spellScale, spellScale);
+            spellLight.intensity = 5 * (1 - collisionTime / 0.5);
+
+            if (collisionTime >= 0.5) {
+                scene.remove(spell);
+                scene.remove(spellBoxHelper);
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    return spellAnimation;
+}
+
+export function updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera) {
+    if (!character || !camera) return;
+
+    const offset = new THREE.Vector3(0, 3, -cameraDistance);
+    offset.applyAxisAngle(new THREE.Vector3(1, 0, 0), cameraPitch);
+
+    const desiredCameraPosition = character.position.clone().add(offset.applyQuaternion(character.quaternion));
+    const direction = desiredCameraPosition.clone().sub(character.position).normalize();
+
+    const raycaster = new THREE.Raycaster(character.position, direction);
+    const intersects = raycaster.intersectObjects(collidableObjects);
+
+    if (intersects.length > 0 && intersects[0].distance < cameraDistance) {
+        const collisionPoint = intersects[0].point;
+        camera.position.copy(collisionPoint.sub(direction.multiplyScalar(0.1)));
+    } else {
+        camera.position.lerp(desiredCameraPosition, 0.1);
+    }
+
+    camera.lookAt(character.position);
+}
+
+
+// ui.js
+export function createManaBar() {
+    const manaBarContainer = document.createElement('div');
+    manaBarContainer.style.position = 'absolute';
+    manaBarContainer.style.bottom = '20px';
+    manaBarContainer.style.left = '80%';
+    manaBarContainer.style.width = '200px';
+    manaBarContainer.style.height = '20px';
+    manaBarContainer.style.border = '2px solid #00ffff';
+    document.body.appendChild(manaBarContainer);
+
+    const manaBar = document.createElement('div');
+    manaBar.style.width = '100%';
+    manaBar.style.height = '100%';
+    manaBar.style.backgroundColor = '#00ffff';
+    manaBarContainer.appendChild(manaBar);
+
+    return manaBar;
+}
+
+export function updateManaBar(manaBarElement, manaPercentage) {
+    if (manaBarElement) {
+        manaBarElement.style.width = `${manaPercentage * 100}%`;
+    }
+}
+
+export function createLifeBar() {
+    const lifeBarContainer = document.createElement('div');
+    lifeBarContainer.style.position = 'absolute';
+    lifeBarContainer.style.bottom = '20px';
+    lifeBarContainer.style.left = '70%';
+    lifeBarContainer.style.transform = 'translateX(-50%)';
+    lifeBarContainer.style.width = '200px';
+    lifeBarContainer.style.height = '20px';
+    lifeBarContainer.style.border = '2px solid #ff0000';
+    document.body.appendChild(lifeBarContainer);
+
+    const lifeBar = document.createElement('div');
+    lifeBar.style.width = '100%';
+    lifeBar.style.height = '100%';
+    lifeBar.style.backgroundColor = '#ff0000';
+    lifeBarContainer.appendChild(lifeBar);
+
+    return lifeBar;
+}
+
+export function createSeedDisplay(seed) {
+    const seedDisplay = document.createElement('div');
+    seedDisplay.style.position = 'absolute';
+    seedDisplay.style.bottom = '5px';
+    seedDisplay.style.left = '5px';
+    seedDisplay.style.color = '#ffffff';
+    seedDisplay.style.fontSize = '12px';
+    seedDisplay.innerText = `Seed: ${seed}`;
+    document.body.appendChild(seedDisplay);
+    return seedDisplay;
+}
+
+export function updateSeedDisplay(seedDisplayElement, newSeed) {
+    if (seedDisplayElement) {
+        seedDisplayElement.innerText = `Seed: ${newSeed}`;
+    }
+}
+
+export function createCollisionBoxToggleButton(toggleCollisionBoxes) {
+    const button = document.createElement('button');
+    button.style.position = 'absolute';
+    button.style.top = '10px';
+    button.style.right = '10px';
+    button.style.zIndex = '1000';
+    button.style.padding = '10px';
+    button.style.backgroundColor = '#333';
+    button.style.color = '#fff';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.cursor = 'pointer';
+
+    button.innerText = 'Toggle Collision Boxes';
+    button.style.pointerEvents = 'auto';
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleCollisionBoxes();
+    });
+
+    document.body.appendChild(button);
+}
+
+export function createDebugLinesToggleButton(toggleDebugLines) {
+    const button = document.createElement('button');
+    button.style.position = 'absolute';
+    button.style.top = '50px';
+    button.style.right = '10px';
+    button.style.zIndex = '1000';
+    button.style.padding = '10px';
+    button.style.backgroundColor = '#555';
+    button.style.color = '#fff';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.cursor = 'pointer';
+
+    button.innerText = 'Toggle Debug Lines';
+    button.style.pointerEvents = 'auto';
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleDebugLines();
+    });
+
+    document.body.appendChild(button);
+}
+
+export function createFireflyCounter(initialCount) {
+    const counter = document.createElement('div');
+    counter.id = 'fireflyCounter';
+    counter.style.position = 'absolute';
+    counter.style.bottom = '80px';
+    counter.style.left = '5%';
+    counter.style.color = '#ffffff';
+    counter.style.fontSize = '24px';
+    counter.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    counter.style.padding = '10px';
+    counter.style.borderRadius = '5px';
+    counter.innerText = `Fireflies: ${initialCount}`;
+    document.body.appendChild(counter);
+}
+
+export function updateFireflyCounter(count) {
+    const counter = document.getElementById('fireflyCounter');
+    if (counter) {
+        counter.innerText = `Fireflies: ${count}`;
+    }
+}
+
+
+// utils.js
+import * as THREE from 'three';
+import seedrandom from 'seedrandom';
+
+export function onWindowResize(camera, renderer) {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+export function onMouseMove(character, cameraPitch, cameraDistance, updateCameraPosition) {
+    return (event) => {
+        if (character) {
+            const rotationSpeed = 0.002;
+            character.rotation.y -= event.movementX * rotationSpeed;
+
+            const tiltSpeed = 0.001;
+            cameraPitch += event.movementY * tiltSpeed;
+            cameraPitch = THREE.MathUtils.clamp(cameraPitch, -Math.PI / 4, Math.PI / 4);
+
+            updateCameraPosition(character, cameraPitch, cameraDistance);
+        }
+    };
+}
+
+export function onMouseWheel(cameraDistance, updateCameraPosition, character) {
+    return (event) => {
+        cameraDistance += event.deltaY * 0.01;
+        cameraDistance = THREE.MathUtils.clamp(cameraDistance, 3, 10);
+
+        updateCameraPosition(character, cameraDistance);
+    };
+}
+
+export function adjustToGroundLevel(character, collidableObjects) {
+    if (!character || !character.geometry || !character.geometry.boundingBox) {
+        return; // Exit silently if character or bounding box is not properly initialized
+    }
+
+    const raycaster = new THREE.Raycaster(
+        new THREE.Vector3(character.position.x, character.position.y + 1, character.position.z),
+        new THREE.Vector3(0, -1, 0)
+    );
+    const intersects = raycaster.intersectObjects(collidableObjects);
+
+    if (intersects.length > 0) {
+        const groundY = intersects[0].point.y;
+        character.position.y = groundY + character.geometry.boundingBox.min.y + 0.5;
+    }
+}
+
+export function disposeObject(obj, scene) {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) obj.material.dispose();
+    scene.remove(obj);
+}
+
+export function fadeToBlack(scene, clock, callback) {
+    const fadeDuration = 1000;
+    const fadePlane = new THREE.PlaneGeometry(30, 30);
+    const fadeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, transparent: true });
+    const fadeMesh = new THREE.Mesh(fadePlane, fadeMaterial);
+
+    fadeMesh.position.set(0, 5, -10);
+    scene.add(fadeMesh);
+
+    const startTime = clock.getElapsedTime();
+
+    function fadeAnimation() {
+        const elapsed = clock.getElapsedTime() - startTime;
+        fadeMaterial.opacity = Math.min(1, elapsed / (fadeDuration / 1000));
+
+        if (elapsed >= fadeDuration / 1000) {
+            callback();
+            fadeMaterial.opacity = 0;
+            scene.remove(fadeMesh);
+        } else {
+            requestAnimationFrame(fadeAnimation);
+        }
+    }
+
+    fadeAnimation();
+}
+
+export function createRNG(seed) {
+    return seedrandom(seed); // Use seedrandom to create a seeded random number generator
+}
+
+
