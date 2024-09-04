@@ -67,7 +67,7 @@ function init() {
 
     // Post-processing setup
     const composer = new EffectComposer(renderer);
-    const renderPixelatedPass = new RenderPixelatedPass(2, scene, camera); // Adjust pixel size as needed
+    const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera); // Adjust pixel size as needed
     composer.addPass(renderPixelatedPass);
 
     const outputPass = new OutputPass();

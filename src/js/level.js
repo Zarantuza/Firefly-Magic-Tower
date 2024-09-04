@@ -2,8 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { fadeToBlack, createRNG } from './utils.js';
-
-import { loadNextLevel } from './game.js'; // Add this import
+import { loadNextLevel } from './game.js';
 
 // Configuration parameters
 const config = {
@@ -15,23 +14,35 @@ const config = {
     numPotions: 5,
     numFireflies: 10,
 
-    floorTexturePath: '/textures/planks-2.png',
-    floorNormalMapPath: '/textures/planks-2-normal.png',
+    floorTexturePath: '/textures/stones-2.png',
+    floorNormalMapPath: '/textures/stones-2-normal.png',
+    floorTextureRepeat: { x: 3, y: 3 },
+    floorNormalStrength: 1.0, // Strength control for floor normal
 
-    ceilingTexturePath: '/textures/planks-2.png',
-    ceilingNormalMapPath: '/textures/planks-2-normal.png',
+    ceilingTexturePath: '/textures/wall-1.png',
+    ceilingNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingTextureRepeat: { x: 1, y: 1 },
+    ceilingNormalStrength: 0.5, // Strength control for ceiling normal
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
+    wallTextureRepeat: { x: 1, y: 1 },
+    wallNormalStrength: 0.7, // Strength control for wall normal
 
     verticalBeamTexturePath: '/textures/wall-1.png',
     verticalBeamNormalMapPath: '/textures/wall-1-normal.png',
+    verticalBeamTextureRepeat: { x: 1, y: 1 },
+    verticalBeamNormalStrength: 0.8, // Strength control for vertical beams
 
-    ceilingBeamTexturePath: '/textures/beam.png',
-    ceilingBeamNormalMapPath: '/textures/beam-normal.png',
+    ceilingBeamTexturePath: '/textures/wall-1.png',
+    ceilingBeamNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingBeamTextureRepeat: { x: 2, y: 2 },
+    ceilingBeamNormalStrength: 0.6, // Strength control for ceiling beams
 
     columnTexturePath: '/textures/wood-1.png',
     columnNormalMapPath: '/textures/wood-1-normal.png',
+    columnTextureRepeat: { x: 1, y: 1 },
+    columnNormalStrength: 0.9, // Strength control for columns
 
     potionModelPath: '/glb/Mana_small_Potion.glb',
 
@@ -86,7 +97,6 @@ export function placePlayer(scene, character, characterBoundingBox) {
 function getRandomFreePosition() {
     let freePositions = [];
 
-    // Iterate through the maze grid to collect all possible free positions
     for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
             const position = { x: col * cellSize + cellSize / 2, z: row * cellSize + cellSize / 2 };
@@ -101,7 +111,6 @@ function getRandomFreePosition() {
         return { x: cellSize / 2, z: cellSize / 2 }; // Fallback to the center of the first cell
     }
 
-    // Randomly select a free position
     const rng = Math.floor(Math.random() * freePositions.length);
     return freePositions[rng];
 }
@@ -120,17 +129,22 @@ function createCeiling(scene, collidableObjects, gridCols, gridRows) {
 
     ceilingTexture.wrapS = THREE.RepeatWrapping;
     ceilingTexture.wrapT = THREE.RepeatWrapping;
-    ceilingTexture.repeat.set(config.gridCols, config.gridRows);
+    ceilingTexture.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
+    ceilingNormalMap.wrapS = THREE.RepeatWrapping;
+    ceilingNormalMap.wrapT = THREE.RepeatWrapping;
+    ceilingNormalMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
 
     const ceilingMaterial = new THREE.MeshPhongMaterial({
         map: ceilingTexture,
         normalMap: ceilingNormalMap,
+        normalScale: new THREE.Vector2(config.ceilingNormalStrength, config.ceilingNormalStrength),
     });
 
     const ceilingGeometry = new THREE.PlaneGeometry(gridCols * cellSize, gridRows * cellSize);
     const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
     ceiling.position.set((gridCols * cellSize) / 2, 6, (gridRows * cellSize) / 2);
-    ceiling.rotation.x = -Math.PI / 2; // Inverse of the roof
+    ceiling.rotation.x = -Math.PI / 2;
     scene.add(ceiling);
     collidableObjects.push(ceiling);
 }
@@ -204,38 +218,32 @@ function createMazeGeometry(scene, collidableObjects) {
 
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
-    wallTexture.repeat.set(1, config.wallHeight / config.cellSize);
+    wallTexture.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
 
     wallNormalMap.wrapS = THREE.RepeatWrapping;
     wallNormalMap.wrapT = THREE.RepeatWrapping;
-    wallNormalMap.repeat.set(1, config.wallHeight / config.cellSize);
+    wallNormalMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
 
     const wallMaterial = new THREE.MeshPhongMaterial({
         map: wallTexture,
         normalMap: wallNormalMap,
-        normalScale: new THREE.Vector2(0.5, 0.5), // Softer shadows
+        normalScale: new THREE.Vector2(config.wallNormalStrength, config.wallNormalStrength),
     });
 
     const floorTexture = textureLoader.load(config.floorTexturePath);
     const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(config.gridCols, config.gridRows);
+    floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+
+    floorNormalMap.wrapS = THREE.RepeatWrapping;
+    floorNormalMap.wrapT = THREE.RepeatWrapping;
+    floorNormalMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
 
     const floorMaterial = new THREE.MeshPhongMaterial({
         map: floorTexture,
         normalMap: floorNormalMap,
-    });
-
-    const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
-    const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
-    ceilingTexture.wrapS = THREE.RepeatWrapping;
-    ceilingTexture.wrapT = THREE.RepeatWrapping;
-    ceilingTexture.repeat.set(config.gridCols, config.gridRows);
-
-    const ceilingMaterial = new THREE.MeshPhongMaterial({
-        map: ceilingTexture,
-        normalMap: ceilingNormalMap,
+        normalScale: new THREE.Vector2(config.floorNormalStrength, config.floorNormalStrength),
     });
 
     for (let row = 0; row < config.gridRows; row++) {
@@ -293,7 +301,14 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
 
     const beamHeight = config.wallHeight + 1;
 
-    // Increase the width and depth to make the beam wider than the wall thickness
+    beamTexture.wrapS = THREE.RepeatWrapping;
+    beamTexture.wrapT = THREE.RepeatWrapping;
+    beamTexture.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
+
+    beamNormalMap.wrapS = THREE.RepeatWrapping;
+    beamNormalMap.wrapT = THREE.RepeatWrapping;
+    beamNormalMap.repeat.set(config.verticalBeamTextureRepeat.x, config.verticalBeamTextureRepeat.y);
+
     const beamWidth = config.wallThickness + 0.3;
     const beamDepth = config.wallThickness + 0.3;
 
@@ -301,9 +316,9 @@ function createVerticalBeam(scene, x, z, collidableObjects) {
     const beamMaterial = new THREE.MeshPhongMaterial({
         map: beamTexture,
         normalMap: beamNormalMap,
+        normalScale: new THREE.Vector2(config.verticalBeamNormalStrength, config.verticalBeamNormalStrength),
     });
 
-    // Offset to properly cover the corner by centering the beam on both axes
     const beam = new THREE.Mesh(beamGeometry, beamMaterial);
     beam.position.set(x, beamHeight / 2 + 1, z);
 
@@ -316,13 +331,21 @@ function createCeilingBeam(scene, x, y, z, width, depth, collidableObjects) {
     const beamTexture = textureLoader.load(config.ceilingBeamTexturePath);
     const beamNormalMap = textureLoader.load(config.ceilingBeamNormalMapPath);
 
+    beamTexture.wrapS = THREE.RepeatWrapping;
+    beamTexture.wrapT = THREE.RepeatWrapping;
+    beamTexture.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
+
+    beamNormalMap.wrapS = THREE.RepeatWrapping;
+    beamNormalMap.wrapT = THREE.RepeatWrapping;
+    beamNormalMap.repeat.set(config.ceilingBeamTextureRepeat.x, config.ceilingBeamTextureRepeat.y);
+
     const beamGeometry = new THREE.BoxGeometry(width, config.wallThickness, depth);
     const beamMaterial = new THREE.MeshPhongMaterial({
         map: beamTexture,
         normalMap: beamNormalMap,
+        normalScale: new THREE.Vector2(config.ceilingBeamNormalStrength, config.ceilingBeamNormalStrength),
     });
 
-    // Slightly offset the beam's position to avoid Z-fighting
     const offset = config.wallThickness / 2 + 0.01;
     const beam = new THREE.Mesh(beamGeometry, beamMaterial);
     beam.position.set(x, y + offset, z);
@@ -364,6 +387,15 @@ function placeStairway(scene, collidableObjects, character) {
     const textureLoader = new THREE.TextureLoader();
     const columnTexture = textureLoader.load(config.columnTexturePath);
     const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
+
+    columnTexture.wrapS = THREE.RepeatWrapping;
+    columnTexture.wrapT = THREE.RepeatWrapping;
+    columnTexture.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
+
+    columnNormalMap.wrapS = THREE.RepeatWrapping;
+    columnNormalMap.wrapT = THREE.RepeatWrapping;
+    columnNormalMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
+
     const columnMaterial = new THREE.MeshPhongMaterial({ map: columnTexture, normalMap: columnNormalMap });
     const column = new THREE.Mesh(columnGeometry, columnMaterial);
     column.position.set(x, 3, z);
@@ -426,10 +458,9 @@ function displayStairwayPrompt() {
 
 function onLevelUpKeyPress(event) {
     if (event.key === 'Enter') {
-        loadNextLevel(); // Ensure this function is defined
+        loadNextLevel(); 
     }
 }
-
 
 function createRoof(scene, collidableObjects) {
     const roofGeometry = new THREE.PlaneGeometry(config.gridCols * config.cellSize, config.gridRows * config.cellSize);
@@ -525,7 +556,7 @@ function addCastleLights(scene) {
             const intensity = config.lightIntensity + Math.random() * 0.5;
             light.intensity = intensity;
         };
-        setInterval(flickerIntensity, 500 );
+        setInterval(flickerIntensity, 500);
     });
 
     const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
@@ -562,7 +593,6 @@ function placeFireflies(scene, collidableObjects, addFirefly) {
 
         firefly.userData = {
             isCollectible: true,
-
             collect: function () {
                 addFirefly();
                 scene.remove(firefly);
