@@ -489,8 +489,12 @@ function placeStairway(scene, collidableObjects, character) {
 
     stairwayCollisionBox.userData = {
         isCollectible: true,
+        isIn: false,
         collect: function () {
-            displayStairwayPrompt();
+            if (!stairwayCollisionBox.userData.isIn) {
+                stairwayCollisionBox.userData.isIn = true;
+                displayStairwayPrompt();
+            }
             document.addEventListener('keydown', onLevelUpKeyPress, { once: true });
         }
     };

@@ -19,6 +19,10 @@ export function checkCollisions(direction, collidableObjects, characterBoundingB
                 return null; // Do not trigger physical reaction to collectible items
             }
             return obj; // Return the object involved in the collision
+        } else {
+            if (obj.userData.isIn) {
+                obj.userData.isIn = false;
+            }
         }
     }
 
