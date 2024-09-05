@@ -136,30 +136,47 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
 
     mana -= spellCost;
 
-    let sphereGeometry, sphereMaterial, spellLight, spellSpeed, scale;
+    let sphereGeometry, sphereMaterial, spellSpeed, scale;
 
     if (activeSpell === 'blue') {
         sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, opacity: 0.5, transparent: true });
+        sphereMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 1.5,
+            opacity: 0.5,
+            transparent: true
+        });
         spellSpeed = 10;
         scale = 1.5;
     } else if (activeSpell === 'yellow') {
         sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: 0.5, transparent: true });
+        sphereMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 1.5,
+            opacity: 0.5,
+            transparent: true
+        });
         spellSpeed = 15;
         scale = 10;
     } else if (activeSpell === 'red') {
         sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true });
+        sphereMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+            emissive: 0xff0000,
+            emissiveIntensity: 1.5,
+            opacity: 0.5,
+            transparent: true
+        });
         spellSpeed = 20;
         scale = 2.0;
     }
 
     const spell = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    spell.layers.enable(BLOOM_SCENE);
 
-    spellLight = new THREE.PointLight(sphereMaterial.color.getHex(), 1, 10);
-    spell.add(spellLight);
+    // Add to bloom layer
+    spell.layers.enable(BLOOM_SCENE);
 
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
@@ -185,13 +202,11 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
                 collisionOccurred = true;
                 collisionTime = 0;
                 spell.scale.set(scale, scale, scale);
-                spellLight.intensity = 5;
             }
         } else {
             collisionTime += delta;
             const spellScale = scale * (1 - collisionTime / 0.5);
             spell.scale.set(spellScale, spellScale, spellScale);
-            spellLight.intensity = 5 * (1 - collisionTime / 0.5);
 
             if (collisionTime >= 0.5) {
                 scene.remove(spell);
@@ -205,6 +220,8 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
 
     return spellAnimation;
 }
+
+
 
 export function updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera) {
     if (!character || !camera) return;

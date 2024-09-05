@@ -63,6 +63,9 @@ function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for mobile performance
+    renderer.outputEncoding = THREE.sRGBEncoding; // Color management
+
     document.body.appendChild(renderer.domElement);
 
     // Post-processing setup
@@ -285,14 +288,24 @@ function checkCollisionsForCollectibles() {
     collidableObjects.forEach((obj) => {
         if (obj.userData.isCollectible) {
             const distance = character.position.distanceTo(obj.position);
+            
+            // Add detailed logging for the distance check
+            //console.log(`Checking collectible ${obj.name || ''} at distance: ${distance.toFixed(2)}`);
+
             if (distance < 1) {
+                //console.log(`Attempting to collect ${obj.name || ''}`);
+                
                 if (typeof obj.userData.collect === 'function') {
                     obj.userData.collect();
+                   // console.log(`Collected ${obj.name || ''}`);
                 }
-            }
+            } else {
+                //console.log(`Too far to collect ${obj.name || ''}`);
+            } 
         }
     });
 }
+
 
 function updateCameraRotation(event) {
     const movementX = event.movementX || 0;
@@ -335,38 +348,29 @@ function generateRandomSeed() {
 }
 
 let stairsPromptCreated = false;
-
 function createStairsPrompt() {
-    let stairsPrompt = document.getElementById('stairsPrompt');
-
-    if (!stairsPrompt) {
-        stairsPrompt = document.createElement('div');
-        stairsPrompt.id = 'stairsPrompt';
-        stairsPrompt.style.position = 'absolute';
-        stairsPrompt.style.top = '50%';
-        stairsPrompt.style.left = '50%';
-        stairsPrompt.style.transform = 'translate(-50%, -50%)';
-        stairsPrompt.style.color = '#ffffff';
-        stairsPrompt.style.fontSize = '24px';
-        stairsPrompt.style.padding = '10px';
-        stairsPrompt.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        stairsPrompt.style.borderRadius = '5px';
-        stairsPrompt.style.display = 'none';
-        stairsPrompt.innerText = 'Press Enter to go up';
-        document.body.appendChild(stairsPrompt);
-        stairsPromptCreated = true;
-    }
+    stairsPrompt = document.createElement('div');
+    stairsPrompt.id = 'stairsPrompt';
+    stairsPrompt.style.position = 'absolute';
+    stairsPrompt.style.top = '50%';
+    stairsPrompt.style.left = '50%';
+    stairsPrompt.style.transform = 'translate(-50%, -50%)';
+    stairsPrompt.style.color = '#ffffff';
+    stairsPrompt.style.fontSize = '24px';
+    stairsPrompt.style.padding = '10px';
+    stairsPrompt.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    stairsPrompt.style.borderRadius = '5px';
+    stairsPrompt.style.display = 'none';
+    stairsPrompt.innerText = 'Press Enter to go up';
+    document.body.appendChild(stairsPrompt);
 }
 
 function showStairsPrompt(visible) {
     if (!stairsPromptCreated) {
         createStairsPrompt();
+        stairsPromptCreated = true;
     }
-    const stairsPrompt = document.getElementById('stairsPrompt');
-    
-    if (stairsPrompt && stairsPrompt.style.display !== (visible ? 'block' : 'none')) {
-        stairsPrompt.style.display = visible ? 'block' : 'none';
-    }
+    stairsPrompt.style.display = visible ? 'block' : 'none';
 }
 
 export { showStairsPrompt, loadNextLevel };

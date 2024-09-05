@@ -1,8 +1,8 @@
-// level.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { fadeToBlack, createRNG } from './utils.js';
 import { loadNextLevel } from './game.js';
+import { CollectiblePool } from './collectiblePool.js';
 
 // Configuration parameters
 const config = {
@@ -14,33 +14,33 @@ const config = {
     numPotions: 5,
     numFireflies: 10,
 
-    floorTexturePath: '/textures/stones-2.png',
-    floorNormalMapPath: '/textures/stones-2-normal.png',
-    floorDisplacementMapPath: '/textures/stones-2-disp.png',
-    floorTextureRepeat: { x: 3, y: 3 },
-    floorNormalStrength: 1, // Strength control for floor normal
-    floorDisplacementScale: 0.05, // Displacement scale for the floor
+    floorTexturePath: '/textures/stones-3.png',
+    floorNormalMapPath: '/textures/stones-3-normal.png',
+    floorDisplacementMapPath: '/textures/stones-3-disp.png',
+    floorTextureRepeat: { x:4, y: 4 },
+    floorNormalStrength: 5, // Strength control for floor normal
+    floorDisplacementScale: 0, // Displacement scale for the floor
 
-    ceilingTexturePath: '/textures/wall-1.png',
-    ceilingNormalMapPath: '/textures/wall-1-normal.png',
+    ceilingTexturePath: '/textures/planks-2.png',
+    ceilingNormalMapPath: '/textures/planks-2-normal.png',
     ceilingDisplacementMapPath: '/textures/wall-1-disp.png',
-    ceilingTextureRepeat: { x: 1, y: 1 },
+    ceilingTextureRepeat: { x: 8, y: 8 },
     ceilingNormalStrength: 0.5, // Strength control for ceiling normal
     ceilingDisplacementScale: 0.1, // Displacement scale for the ceiling
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
-    wallDisplacementMapPath: '/textures/planks-1-disp.png',
+    wallDisplacementMapPath: '/textures/planks-2-disp.png',
     wallTextureRepeat: { x: 1, y: 1 },
-    wallNormalStrength: 0.7, // Strength control for wall normal
-    wallDisplacementScale: 0.15, // Displacement scale for the walls
+    wallNormalStrength: 0.1, // Strength control for wall normal
+    wallDisplacementScale: 0.5, // Displacement scale for the walls
 
-    verticalBeamTexturePath: '/textures/wall-1.png',
-    verticalBeamNormalMapPath: '/textures/wall-1-normal.png',
-    verticalBeamDisplacementMapPath: '/textures/wall-1-disp.png',
-    verticalBeamTextureRepeat: { x: 1, y: 1 },
-    verticalBeamNormalStrength: 0.8, // Strength control for vertical beams
-    verticalBeamDisplacementScale: 0.1, // Displacement scale for vertical beams
+    verticalBeamTexturePath: '/textures/wall-3.png',
+    verticalBeamNormalMapPath: '/textures/wall-3-normal.png',
+    verticalBeamDisplacementMapPath: '/textures/wall-3-disp.png',
+    verticalBeamTextureRepeat: { x: 0.1, y: 1 },
+    verticalBeamNormalStrength: 0, // Strength control for vertical beams
+    verticalBeamDisplacementScale: 0.5, // Displacement scale for vertical beams
 
     ceilingBeamTexturePath: '/textures/wall-1.png',
     ceilingBeamNormalMapPath: '/textures/wall-1-normal.png',
@@ -58,9 +58,9 @@ const config = {
 
     potionModelPath: '/glb/Mana_small_Potion.glb',
 
-    lightIntensity: 2,
+    lightIntensity: 4,
     lightColor: 0xFFAA00,
-    ambientLightIntensity: 0.35,
+    ambientLightIntensity: 0.2,
     shadowMapSize: 1024,
     floatingObjectSpeedRange: [0.3, 0.9],
     floatingObjectHeight: 0.5,
@@ -69,6 +69,8 @@ const config = {
 let gridRows = config.gridRows;
 let gridCols = config.gridCols;
 const cellSize = config.cellSize;
+let collectiblePool = null;
+
 
 let maze = [];
 let stairsPosition = { x: 0, z: 0 };
@@ -526,14 +528,52 @@ function onLevelUpKeyPress(event) {
 }
 
 function createRoof(scene, collidableObjects) {
+    const textureLoader = new THREE.TextureLoader();
+
+    // Load ceiling textures
+    const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
+    const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
+    const ceilingDisplacementMap = textureLoader.load(config.ceilingDisplacementMapPath);
+
+    // Repeat texture if needed
+    ceilingTexture.wrapS = THREE.RepeatWrapping;
+    ceilingTexture.wrapT = THREE.RepeatWrapping;
+    ceilingTexture.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
+    ceilingNormalMap.wrapS = THREE.RepeatWrapping;
+    ceilingNormalMap.wrapT = THREE.RepeatWrapping;
+    ceilingNormalMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
+    ceilingDisplacementMap.wrapS = THREE.RepeatWrapping;
+    ceilingDisplacementMap.wrapT = THREE.RepeatWrapping;
+    ceilingDisplacementMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
+
+    // Use MeshLambertMaterial for the ceiling with normal and displacement maps
+    const roofMaterial = new THREE.MeshPhongMaterial({
+        map: ceilingTexture,
+        normalMap: ceilingNormalMap,
+        normalScale: new THREE.Vector2(config.ceilingNormalStrength, config.ceilingNormalStrength),
+        displacementMap: ceilingDisplacementMap,
+        displacementScale: config.ceilingDisplacementScale,
+        side: THREE.DoubleSide // Render both faces of the plane
+    });
+
     const roofGeometry = new THREE.PlaneGeometry(config.gridCols * config.cellSize, config.gridRows * config.cellSize);
-    const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+
+    // Set the position
     roof.position.set((config.gridCols * cellSize) / 2, 6, (config.gridRows * cellSize) / 2);
-    roof.rotation.x = Math.PI / 2;
+
+    // Rotate the roof upside down
+    roof.rotation.x = -Math.PI / 2;
+
     scene.add(roof);
     collidableObjects.push(roof);
 }
+
+
+
 
 function createCircularPlatform(scene, collidableObjects) {
     const platformGeometry = new THREE.CylinderGeometry(2, 2, 1, 32);
@@ -573,57 +613,27 @@ function placeManaPotions(scene, collidableObjects, increaseMana) {
             potion.scale.set(0.25, 0.25, 0.25);
             potion.position.set(x, 1.5, z);
 
-            const light = new THREE.PointLight(0x00ffff, 1, 5);
-            light.position.set(0, 1.5, 0);
-            potion.add(light);
-
-            const floatSpeed = config.floatingObjectSpeedRange[0] + rng() * (config.floatingObjectSpeedRange[1] - config.floatingObjectSpeedRange[0]);
-            const floatHeight = config.floatingObjectHeight;
-
             potion.userData = {
                 isCollectible: true,
                 collect: function () {
+                    console.log(`Collected: ${potion.name}`);
                     increaseMana(35);
                     setTimeout(() => {
                         scene.remove(potion);
-                        collidableObjects.splice(collidableObjects.indexOf(potion), 1);
+                        const index = collidableObjects.indexOf(potion);
+                        if (index !== -1) {
+                            collidableObjects.splice(index, 1);
+                        }
+                        console.log(`Remaining collectibles: ${collidableObjects.length}`);
                     }, 50);
-                },
-                update: function (delta) {
-                    const time = Date.now() * 0.001 * floatSpeed;
-                    potion.position.y = 1.5 + Math.sin(time) * floatHeight;
-                },
+                }
             };
 
-            scene.add(potion);
+            // Ensure the potion is added to collidableObjects
             collidableObjects.push(potion);
+            scene.add(potion);
         });
     }
-}
-
-function addCastleLights(scene) {
-    const lightPositions = [
-        new THREE.Vector3(config.gridCols * config.cellSize / 2, 5, config.gridRows * config.cellSize / 2),
-        new THREE.Vector3(config.gridCols * config.cellSize / 4, 6, config.gridRows * config.cellSize / 4),
-        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, config.gridRows * config.cellSize / 4),
-        new THREE.Vector3(config.gridCols * config.cellSize / 4, 5, (config.gridRows * 3) / 4 * config.cellSize),
-        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, (config.gridRows * 3) / 4 * config.cellSize)
-    ];
-
-    lightPositions.forEach(pos => {
-        const light = new THREE.PointLight(config.lightColor, config.lightIntensity, 20);
-        light.position.copy(pos);
-        scene.add(light);
-
-        const flickerIntensity = () => {
-            const intensity = config.lightIntensity + Math.random() * 0.5;
-            light.intensity = intensity;
-        };
-        setInterval(flickerIntensity, 500);
-    });
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
-    scene.add(ambientLight);
 }
 
 function placeFireflies(scene, collidableObjects, addFirefly) {
@@ -647,27 +657,51 @@ function placeFireflies(scene, collidableObjects, addFirefly) {
         firefly.position.set(x, 1.5, z);
         firefly.name = `Firefly_${i}`;
 
-        const light = new THREE.PointLight(0xEEA354, 5, 5);
-        light.position.set(0, 1.5, 0);
-        firefly.add(light);
-
-        const floatSpeed = config.floatingObjectSpeedRange[0] + rng() * (config.floatingObjectSpeedRange[1] - config.floatingObjectSpeedRange[0]);
-        const floatHeight = config.floatingObjectHeight;
-
         firefly.userData = {
             isCollectible: true,
             collect: function () {
+                console.log(`Collected: ${firefly.name}`);
                 addFirefly();
-                scene.remove(firefly);
-                collidableObjects.splice(collidableObjects.indexOf(firefly), 1);
-            },
-            update: function (delta) {
-                const time = Date.now() * 0.001 * floatSpeed;
-                firefly.position.y = 1.5 + Math.sin(time) * floatHeight;
-            },
+                setTimeout(() => {
+                    scene.remove(firefly);
+                    const index = collidableObjects.indexOf(firefly);
+                    if (index !== -1) {
+                        collidableObjects.splice(index, 1);
+                    }
+                    console.log(`Remaining collectibles: ${collidableObjects.length}`);
+                }, 50);
+            }
         };
 
-        scene.add(firefly);
+        // Ensure the firefly is added to collidableObjects
         collidableObjects.push(firefly);
+        scene.add(firefly);
     }
+}
+
+
+
+function addCastleLights(scene) {
+    const lightPositions = [
+        new THREE.Vector3(config.gridCols * config.cellSize / 2, 5, config.gridRows * config.cellSize / 2),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, 6, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, 5, (config.gridRows * 3) / 4 * config.cellSize),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, (config.gridRows * 3) / 4 * config.cellSize)
+    ];
+
+    lightPositions.forEach(pos => {
+        const light = new THREE.PointLight(config.lightColor, config.lightIntensity, 20);
+        light.position.copy(pos);
+        scene.add(light);
+
+        const flickerIntensity = () => {
+            const intensity = config.lightIntensity + Math.random() * 1.5;
+            light.intensity = intensity;
+        };
+        setInterval(flickerIntensity, 500);
+    });
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
+    scene.add(ambientLight);
 }
