@@ -60,7 +60,7 @@ const config = {
 
     lightIntensity: 4,
     lightColor: 0xFFAA00,
-    ambientLightIntensity: 0.2,
+    ambientLightIntensity: 0,
     shadowMapSize: 1024,
     floatingObjectSpeedRange: [0.3, 0.9],
     floatingObjectHeight: 0.5,
@@ -563,7 +563,7 @@ function createRoof(scene, collidableObjects) {
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
 
     // Set the position
-    roof.position.set((config.gridCols * cellSize) / 2, 6, (config.gridRows * cellSize) / 2);
+    roof.position.set((config.gridCols * cellSize) / 2, config.wallHeight*1.3, (config.gridRows * cellSize) / 2);
 
     // Rotate the roof upside down
     roof.rotation.x = -Math.PI / 2;
@@ -683,11 +683,11 @@ function placeFireflies(scene, collidableObjects, addFirefly) {
 
 function addCastleLights(scene) {
     const lightPositions = [
-        new THREE.Vector3(config.gridCols * config.cellSize / 2, 5, config.gridRows * config.cellSize / 2),
-        new THREE.Vector3(config.gridCols * config.cellSize / 4, 6, config.gridRows * config.cellSize / 4),
-        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, config.gridRows * config.cellSize / 4),
-        new THREE.Vector3(config.gridCols * config.cellSize / 4, 5, (config.gridRows * 3) / 4 * config.cellSize),
-        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, 5, (config.gridRows * 3) / 4 * config.cellSize)
+        new THREE.Vector3(config.gridCols * config.cellSize / 2, config.wallHeight, config.gridRows * config.cellSize / 2),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, config.wallHeight, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, config.wallHeight, config.gridRows * config.cellSize / 4),
+        new THREE.Vector3(config.gridCols * config.cellSize / 4, config.wallHeight, (config.gridRows * 3) / 4 * config.cellSize),
+        new THREE.Vector3((config.gridCols * 3) / 4 * config.cellSize, config.wallHeight, (config.gridRows * 3) / 4 * config.cellSize)
     ];
 
     lightPositions.forEach(pos => {
@@ -699,7 +699,7 @@ function addCastleLights(scene) {
             const intensity = config.lightIntensity + Math.random() * 1.5;
             light.intensity = intensity;
         };
-        setInterval(flickerIntensity, 500);
+        setInterval(flickerIntensity, 250);
     });
 
     const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
