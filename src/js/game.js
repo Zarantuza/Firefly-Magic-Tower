@@ -1,15 +1,19 @@
+// game.js
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { createLevel } from './level.js';
-import { handlePlayerMovement, initiateJump, initiatePunch, shootSpell, updateCameraPosition } from './player.js';
+import { createLevel, checkCollisionsForCollectibles } from './level.js';
+import { handlePlayerMovement, initiateJump, initiatePunch, castSpell, updateCameraPosition, getMana, setMana, getMaxMana } from './player.js';
 import { onWindowResize, onMouseMove, onMouseWheel } from './utils.js';
 import { checkCollisions } from './collision.js';
-import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createCollisionBoxToggleButton, createDebugLinesToggleButton, createFireflyCounter, updateFireflyCounter } from './ui.js';
+import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createCollisionBoxToggleButton, createDebugLinesToggleButton, createFireflyCounter, updateFireflyCounter, createSpellDisplay, updateSpellUI, createSpellSelectionBar, updateSelectedSpell, updateSpellSelectionBar } from './ui.js';
+import { getAvailableSpell, spells } from './spells.js';
 import Stats from 'stats.js';
+import { spawnEnemy } from './enemy.js';
 
+let navMesh;
 let scene, camera, renderer, mixer, clock;
 let keysPressed = {};
 let cameraDistance = 2;
@@ -30,15 +34,15 @@ let stairsPosition = null;
 let isFPSMode = false;
 let collisionBoxVisible = false;
 let debugLinesVisible = true;
-let mana = 100;
-const maxMana = 100;
 let currentLevel = 1;
 let nearStairs = false;
-let fireflyCount = 49;
-let activeSpell = 'blue'; // Default spell
+let fireflyCount = 5000;
+let currentSpell = null;
 let stats;
 let stairsPromptVisible = false;
 let stairsPrompt = null;
+let selectedSpellIndex = 0;
+let enemies = [];
 
 const wizardCollisionBoxSize = new THREE.Vector3(0.5, 1, 0.5);
 const wizardCollisionBoxOffset = new THREE.Vector3(0, 0.5, 0);
@@ -52,8 +56,10 @@ let maxCameraPitch = Math.PI / 4;
 
 function init() {
     stats = new Stats();
-    stats.showPanel(0); // 0: FPS, 1: ms/frame, 2: memory usage
+    stats.showPanel(0);
     document.body.appendChild(stats.dom);
+
+    
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
@@ -63,14 +69,13 @@ function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for mobile performance
-    renderer.outputEncoding = THREE.sRGBEncoding; // Color management
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
 
     document.body.appendChild(renderer.domElement);
 
-    // Post-processing setup
     const composer = new EffectComposer(renderer);
-    const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera); // Adjust pixel size as needed
+    const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera);
     composer.addPass(renderPixelatedPass);
 
     const outputPass = new OutputPass();
@@ -119,8 +124,16 @@ function init() {
 
         debugHelpers.push(characterBoundingBox);
 
-        createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly);
+        createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies);
+        console.log(`Number of enemies created: ${enemies.length}`);
+        enemies.forEach((enemy, index) => {
+            console.log(`Enemy ${index} position:`, enemy.position);
+        });
     });
+
+    for (let i = 0; i < 5; i++) {
+        enemies.push(spawnEnemy(scene, collidableObjects));
+    }
 
     manaBarElement = createManaBar();
     seedDisplayElement = createSeedDisplay(seed);
@@ -128,19 +141,15 @@ function init() {
     createCollisionBoxToggleButton(toggleCollisionBoxes);
     createDebugLinesToggleButton(toggleDebugLines);
     createFireflyCounter(fireflyCount);
+    createSpellDisplay();
     createStairsPrompt();
+    createSpellSelectionBar(spells);
+    updateSpellSelectionBar(fireflyCount);
+    updateSelectedSpell(selectedSpellIndex);
 
     window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
 
-    document.addEventListener('keydown', (event) => {
-        keysPressed[event.key.toLowerCase()] = true;
-        if (event.key.toLowerCase() === ' ') {
-            initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed);
-        }
-        if (event.key.toLowerCase() === 'enter' && nearStairs) {
-            loadNextLevel();
-        }
-    });
+    document.addEventListener('keydown', handleKeyDown);
 
     document.addEventListener('keyup', (event) => {
         keysPressed[event.key.toLowerCase()] = false;
@@ -168,13 +177,7 @@ function init() {
 
     document.addEventListener('mousedown', (event) => {
         if (event.button === 0) {
-            if (fireflyCount >= 5) {
-                initiatePunch(character, mixer, animationsMap, setAction, isJumping);
-                const spellAnimation = shootSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, activeSpell);
-                if (spellAnimation) {
-                    spellAnimations.push(spellAnimation);
-                }
-            }
+            castSelectedSpell();
         } else if (event.button === 2) {
             toggleFPSMode(true);
         }
@@ -198,11 +201,11 @@ function init() {
         }
     });
 
-    animate(composer); // Pass composer to the animate function
+    animate(composer);
 }
 
 function animate(composer) {
-    stats.begin(); // Start monitoring FPS
+    stats.begin();
 
     const delta = clock.getDelta();
     if (mixer) mixer.update(delta);
@@ -213,12 +216,92 @@ function animate(composer) {
     spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
 
     checkStairwayProximity();
-    checkCollisionsForCollectibles();
+    checkCollisionsForCollectibles(character, collidableObjects);
 
-    composer.render(); // Use composer to render with post-processing
+    // Update mana UI
+    updateManaBar(manaBarElement, getMana() / getMaxMana());
 
-    stats.end(); // End monitoring FPS
+    // Update current spell based on firefly count
+    currentSpell = getAvailableSpell(fireflyCount);
+
+    // Update spell UI based on selected spell
+    const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
+    updateSpellUI(selectedSpell, fireflyCount);
+
+    // Update spell selection bar
+    updateSpellSelectionBar(fireflyCount);
+
+    // Update enemies
+    enemies = enemies.filter(enemy => {
+        if (enemy.health > 0) {
+            enemy.update(delta);
+            return true;
+        } else {
+            // Remove dead enemies from the scene
+            if (enemy.mesh) {
+                scene.remove(enemy.mesh);
+            }
+            return false;
+        }
+    });
+
+    // Spawn new enemies if needed
+    while (enemies.length < 5) {
+        const newEnemy = spawnEnemy(scene, collidableObjects, navMesh);
+        if (newEnemy) {
+            enemies.push(newEnemy);
+        }
+    }
+
+    composer.render();
+
+    stats.end();
     requestAnimationFrame(() => animate(composer));
+}
+
+enemies.forEach(enemy => enemy.update(delta));
+function handleKeyDown(event) {
+    keysPressed[event.key.toLowerCase()] = true;
+    if (event.key.toLowerCase() === ' ') {
+        initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed);
+    }
+    if (event.key.toLowerCase() === 'enter' && nearStairs) {
+        loadNextLevel();
+    }
+    
+    const key = event.key.toLowerCase();
+    const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à',')'];
+    const index = spellKeys.indexOf(key);
+
+    if (index !== -1) {
+        if (index === 0 || (spells[index - 1] && fireflyCount >= spells[index - 1].firefliesRequired)) {
+            selectedSpellIndex = index;
+            updateSelectedSpell(selectedSpellIndex);
+        
+            // Update spell UI immediately when a new spell is selected
+            const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
+            updateSpellUI(selectedSpell, fireflyCount);
+
+            
+        }
+    }
+}
+
+function castSelectedSpell() {
+    if (selectedSpellIndex === 0) {
+        // Melee attack
+        initiatePunch(character, mixer, animationsMap, setAction, isJumping);
+    } else {
+        const spell = spells[selectedSpellIndex - 1];
+        if (spell && fireflyCount >= spell.firefliesRequired) {
+            const spellAnimation = castSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, fireflyCount, spell, enemies);
+            if (spellAnimation) {
+                spellAnimations.push(spellAnimation);
+            }
+        } else {
+            console.warn('Not enough fireflies to cast this spell');
+        }
+    }
 }
 
 function checkStairwayProximity() {
@@ -238,7 +321,18 @@ function loadNextLevel() {
     currentLevel += 1;
     seed = generateRandomSeed();
     updateSeedDisplay(seedDisplayElement, seed);
-    createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly);
+    enemies.forEach(enemy => {
+        if (enemy.mesh) {
+            scene.remove(enemy.mesh);
+        }
+    });
+    enemies = [];
+    createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly,enemies);
+    
+    for (let i = 0; i < 5; i++) {
+        enemies.push(spawnEnemy(scene, collidableObjects));
+    }   
+    
     nearStairs = false;
     showStairsPrompt(false);
 }
@@ -262,50 +356,17 @@ function setIsJumping(state) {
 }
 
 function increaseMana(amount) {
-    mana = Math.min(mana + amount, maxMana);
-    updateManaBar(manaBarElement, mana / maxMana);
+    setMana(Math.min(getMana() + amount, getMaxMana()));
+    updateManaBar(manaBarElement, getMana() / getMaxMana());
 }
 
 function addFirefly() {
     fireflyCount += 1;
     updateFireflyCounter(fireflyCount);
-    updateActiveSpell();
+    currentSpell = getAvailableSpell(fireflyCount);
+    updateSpellUI(currentSpell, fireflyCount);
+    updateSpellSelectionBar(fireflyCount);
 }
-
-function updateActiveSpell() {
-    if (fireflyCount >= 500) {
-        activeSpell = 'red';
-    } else if (fireflyCount >= 50) {
-        activeSpell = 'yellow';
-    } else if (fireflyCount >= 5) {
-        activeSpell = 'blue';
-    } else {
-        activeSpell = null;
-    }
-}
-
-function checkCollisionsForCollectibles() {
-    collidableObjects.forEach((obj) => {
-        if (obj.userData.isCollectible) {
-            const distance = character.position.distanceTo(obj.position);
-            
-            // Add detailed logging for the distance check
-            //console.log(`Checking collectible ${obj.name || ''} at distance: ${distance.toFixed(2)}`);
-
-            if (distance < 1) {
-                //console.log(`Attempting to collect ${obj.name || ''}`);
-                
-                if (typeof obj.userData.collect === 'function') {
-                    obj.userData.collect();
-                   // console.log(`Collected ${obj.name || ''}`);
-                }
-            } else {
-                //console.log(`Too far to collect ${obj.name || ''}`);
-            } 
-        }
-    });
-}
-
 
 function updateCameraRotation(event) {
     const movementX = event.movementX || 0;
@@ -373,5 +434,6 @@ function showStairsPrompt(visible) {
     stairsPrompt.style.display = visible ? 'block' : 'none';
 }
 
-export { showStairsPrompt, loadNextLevel };
 init();
+
+export { showStairsPrompt, loadNextLevel };

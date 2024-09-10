@@ -48,11 +48,6 @@ export function adjustToGroundLevel(character, collidableObjects) {
     }
 }
 
-export function disposeObject(obj, scene) {
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) obj.material.dispose();
-    scene.remove(obj);
-}
 
 export function fadeToBlack(scene, clock, callback) {
     const fadeDuration = 1000;

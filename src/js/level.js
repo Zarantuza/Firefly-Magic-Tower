@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { fadeToBlack, createRNG } from './utils.js';
 import { loadNextLevel } from './game.js';
-import { CollectiblePool } from './collectiblePool.js';
+import { NavMesh } from './enemyNavigation.js';
+import { spawnEnemy } from './enemy.js';  // Add this line
+import { player } from './player.js';
+
 
 // Configuration parameters
 const config = {
@@ -13,6 +16,15 @@ const config = {
     wallThickness: 0.5,
     numPotions: 5,
     numFireflies: 10,
+
+    potions: {
+        SMALL_LIFE_POTION: 2,
+        BIG_LIFE_POTION: 1,
+        SMALL_MANA_POTION: 2,
+        BIG_MANA_POTION: 1,
+        SMALL_SPEED_POTION: 2,
+        BIG_SPEED_POTION: 10
+    },
 
     floorTexturePath: '/textures/stones-3.png',
     floorNormalMapPath: '/textures/stones-3-normal.png',
@@ -66,30 +78,116 @@ const config = {
     floatingObjectHeight: 0.5,
 };
 
+//configuration des object collectibles
+const ITEM_TYPES = {
+    SMALL_LIFE_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => { 
+            console.log("Healing player for 20");
+            // Assurez-vous que player.heal est défini dans la classe Player
+            if (typeof player.heal === 'function') player.heal(20);
+        }, 
+        color: 0xff0000 
+    },
+    BIG_LIFE_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => {
+            console.log("Healing player for 50");
+            if (typeof player.heal === 'function') player.heal(50);
+        }, 
+        color: 0xff3333 
+    },
+    SMALL_MANA_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => {
+            console.log("Increasing player mana by 20");
+            if (typeof player.increaseMana === 'function') player.increaseMana(20);
+        }, 
+        color: 0x0000ff 
+    },
+    BIG_MANA_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => {
+            console.log("Increasing player mana by 50");
+            if (typeof player.increaseMana === 'function') player.increaseMana(50);
+        }, 
+        color: 0x3333ff 
+    },
+    SMALL_SPEED_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => {
+            console.log("Increasing player speed by 1.2 for 10 seconds");
+            if (typeof player.increaseSpeed === 'function') player.increaseSpeed(1.2, 10);
+        }, 
+        color: 0x00ff00 
+    },
+    BIG_SPEED_POTION: { 
+        mesh: config.potionModelPath, 
+        effect: (player) => {
+            console.log("Increasing player speed by 1.5 for 15 seconds");
+            if (typeof player.increaseSpeed === 'function') player.increaseSpeed(1.5, 15);
+        }, 
+        color: 0x33ff33 
+    },
+    FIREFLY: { 
+        mesh: null, 
+        effect: (player) => {
+            console.log("Player collected a firefly");
+            if (typeof player.collectFirefly === 'function') player.collectFirefly();
+        }
+    }
+};
+
 let gridRows = config.gridRows;
 let gridCols = config.gridCols;
 const cellSize = config.cellSize;
+let navMesh;
 let collectiblePool = null;
+let occupiedPositions = new Set();
+
 
 
 let maze = [];
 let stairsPosition = { x: 0, z: 0 };
 
-export function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly) {
+export async function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies = []) {
     collidableObjects.forEach(obj => disposeObject(obj, scene));
     collidableObjects.length = 0;
     collisionHelpers.forEach(helper => disposeObject(helper, scene));
     collisionHelpers.length = 0;
     debugHelpers.length = 0;
 
+    // Clear existing enemies
+    enemies.forEach(enemy => {
+        if (enemy.mesh) {
+            scene.remove(enemy.mesh);
+        }
+    });
+    enemies.length = 0;
+
     generateMaze(gridRows, gridCols, seed);
     createMazeGeometry(scene, collidableObjects);
     stairsPosition = placeStairway(scene, collidableObjects, character);
     createRoof(scene, collidableObjects);
-    createCircularPlatform(scene, collidableObjects);
-    placeManaPotions(scene, collidableObjects, increaseMana);
+    console.log("About to place items...");
+    placeItems(scene, collidableObjects, player);
     addCastleLights(scene);
-    placeFireflies(scene, collidableObjects, addFirefly);
+    console.log("Items placed.");
+
+    try {
+        // Create NavMesh
+        navMesh = new NavMesh(maze);
+
+        // Spawn new enemies
+        for (let i = 0; i < 5; i++) {
+            const newEnemy = await spawnEnemy(scene, collidableObjects, navMesh);
+            if (newEnemy) {
+                enemies.push(newEnemy);
+            }
+        }
+    } catch (error) {
+        console.error('Error creating NavMesh or spawning enemies:', error);
+    }
 
     fadeToBlack(scene, clock, () => {
         placePlayer(scene, character, characterBoundingBox);
@@ -573,112 +671,142 @@ function createRoof(scene, collidableObjects) {
 }
 
 
-
-
-function createCircularPlatform(scene, collidableObjects) {
-    const platformGeometry = new THREE.CylinderGeometry(2, 2, 1, 32);
-    const platformMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
-    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-    platform.position.set(0, 0.4, 0);
-    scene.add(platform);
-
-    collidableObjects.push(platform);
-}
-
 function disposeObject(obj, scene) {
     if (obj.geometry) obj.geometry.dispose();
     if (obj.material) obj.material.dispose();
     scene.remove(obj);
 }
 
-function placeManaPotions(scene, collidableObjects, increaseMana) {
+function placeItems(scene, collidableObjects, player) {
+    console.log("Starting to place items...");
     const loader = new GLTFLoader();
     const rng = createRNG(Date.now().toString());
+    occupiedPositions.clear();
 
-    for (let i = 0; i < config.numPotions; i++) {
-        const randomRow = Math.floor(rng() * config.gridRows);
-        const randomCol = Math.floor(rng() * config.gridCols);
+    Object.entries(ITEM_TYPES).forEach(([itemType, itemData]) => {
+        const count = itemType === 'FIREFLY' ? config.numFireflies : (config.potions[itemType] || 0);
+        console.log(`Attempting to place ${count} ${itemType}`);
 
-        let x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
-        let z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+        for (let i = 0; i < count; i++) {
+            const { x, z } = getRandomPosition(rng);
+            console.log(`Placing ${itemType} at position (${x}, ${z})`);
 
-        while (isPositionInWall({ x, z })) {
-            x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
-            z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+            if (itemType === 'FIREFLY') {
+                placeFirefly(scene, collidableObjects, x, z, player);
+            } else {
+                placePotionModel(loader, scene, collidableObjects, x, z, itemType, itemData, player);
+            }
         }
+    });
 
-        loader.load(config.potionModelPath, (gltf) => {
-            const potion = gltf.scene;
-            potion.name = `Potion_${i}`;
-            potion.scale.set(0.25, 0.25, 0.25);
-            potion.position.set(x, 1.5, z);
-
-            potion.userData = {
-                isCollectible: true,
-                collect: function () {
-                    console.log(`Collected: ${potion.name}`);
-                    increaseMana(35);
-                    setTimeout(() => {
-                        scene.remove(potion);
-                        const index = collidableObjects.indexOf(potion);
-                        if (index !== -1) {
-                            collidableObjects.splice(index, 1);
-                        }
-                        console.log(`Remaining collectibles: ${collidableObjects.length}`);
-                    }, 50);
-                }
-            };
-
-            // Ensure the potion is added to collidableObjects
-            collidableObjects.push(potion);
-            scene.add(potion);
-        });
-    }
+    console.log("Finished placing items.");
 }
 
-function placeFireflies(scene, collidableObjects, addFirefly) {
-    const rng = createRNG(Date.now().toString());
+function getRandomPosition(rng) {
+    let x, z;
+    let attempts = 0;
+    const maxAttempts = 100; // Évite une boucle infinie
 
-    for (let i = 0; i < config.numFireflies; i++) {
+    do {
         const randomRow = Math.floor(rng() * config.gridRows);
         const randomCol = Math.floor(rng() * config.gridCols);
+        x = randomCol * config.cellSize + rng() * config.cellSize;
+        z = randomRow * config.cellSize + rng() * config.cellSize;
+        attempts++;
 
-        let x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
-        let z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
-
-        while (isPositionInWall({ x, z })) {
-            x = randomCol * config.cellSize + rng() * config.cellSize * 0.5;
-            z = randomRow * config.cellSize + rng() * config.cellSize * 0.5;
+        if (attempts > maxAttempts) {
+            console.warn("Could not find a free position after max attempts");
+            return null;
         }
+    } while (isPositionOccupied(x, z) || isPositionInWall({ x, z }));
 
-        const fireflyGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-        const fireflyMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const firefly = new THREE.Mesh(fireflyGeometry, fireflyMaterial);
-        firefly.position.set(x, 1.5, z);
-        firefly.name = `Firefly_${i}`;
+    occupiedPositions.add(`${Math.floor(x)},${Math.floor(z)}`);
+    return { x, z };
+}
 
-        firefly.userData = {
+function isPositionOccupied(x, z) {
+    return occupiedPositions.has(`${Math.floor(x)},${Math.floor(z)}`);
+}
+
+function placeFirefly(scene, collidableObjects, x, z, player) {
+    const fireflyGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const fireflyMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const firefly = new THREE.Mesh(fireflyGeometry, fireflyMaterial);
+    firefly.position.set(x, 1.5, z);
+    firefly.name = `Firefly_${x}_${z}`;
+
+    firefly.userData = {
+        type: 'FIREFLY',
+        isCollectible: true,
+        isCollected: false,
+        collect: function () {
+            if (!this.isCollected) {
+                this.isCollected = true;
+                ITEM_TYPES.FIREFLY.effect(player);
+                scene.remove(firefly);
+                collidableObjects.splice(collidableObjects.indexOf(firefly), 1);
+            }
+        }
+    };
+
+    collidableObjects.push(firefly);
+    scene.add(firefly);
+}
+
+function placePotionModel(loader, scene, collidableObjects, x, z, itemType, itemData, player) {
+    if (x === null || z === null) {
+        console.warn(`Could not place ${itemType} due to lack of free space`);
+        return;
+    }
+    console.log(`Loading model for ${itemType}...`);
+    loader.load(itemData.mesh, (gltf) => {
+        console.log(`Model for ${itemType} loaded successfully.`);
+        const potion = gltf.scene;
+        potion.name = `${itemType}_${x}_${z}`;
+        potion.scale.set(0.25, 0.25, 0.25);
+        potion.position.set(x, 1.5, z);
+
+        // Appliquer la couleur à la potion
+        potion.traverse((child) => {
+            if (child.isMesh) {
+                child.material = child.material.clone();
+                child.material.color.setHex(itemData.color);
+            }
+        });
+
+        potion.userData = {
+            type: itemType,
             isCollectible: true,
+            isCollected: false,
             collect: function () {
-                console.log(`Collected: ${firefly.name}`);
-                addFirefly();
-                setTimeout(() => {
-                    scene.remove(firefly);
-                    const index = collidableObjects.indexOf(firefly);
-                    if (index !== -1) {
-                        collidableObjects.splice(index, 1);
-                    }
-                    console.log(`Remaining collectibles: ${collidableObjects.length}`);
-                }, 50);
+                if (!this.isCollected) {
+                    this.isCollected = true;
+                    itemData.effect(player); // Appel correct de l'effet
+                    scene.remove(potion);
+                    collidableObjects.splice(collidableObjects.indexOf(potion), 1);
+                    console.log(`${itemType} collected and removed from scene.`);
+                }
             }
         };
 
-        // Ensure the firefly is added to collidableObjects
-        collidableObjects.push(firefly);
-        scene.add(firefly);
-    }
+        collidableObjects.push(potion);
+        scene.add(potion);
+        console.log(`${itemType} added to scene at position (${x}, ${z})`);
+    }, undefined, (error) => {
+        console.error(`Error loading model for ${itemType}:`, error);
+    });
 }
 
+export function checkCollisionsForCollectibles(character, collidableObjects) {
+    collidableObjects.forEach((obj) => {
+        if (obj.userData.isCollectible && !obj.userData.isCollected) {
+            const distance = character.position.distanceTo(obj.position);
+            if (distance < 1) {
+                obj.userData.collect();
+            }
+        }
+    });
+}
 
 
 function addCastleLights(scene) {
@@ -705,3 +833,4 @@ function addCastleLights(scene) {
     const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
     scene.add(ambientLight);
 }
+

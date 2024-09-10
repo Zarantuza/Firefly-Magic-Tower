@@ -2,19 +2,53 @@ import * as THREE from 'three';
 import { checkCollisions } from './collision.js';
 import { adjustToGroundLevel } from './utils.js';
 import { updateManaBar } from './ui.js';
+import { shootSpell, getAvailableSpell } from './spells.js';
 
 let velocityY = 0;
 const gravity = -9.8;
 const jumpStrength = 5;
-let walkSpeed = 2;
-let runSpeed = 5;
+const walkSpeed = 2;
+const runSpeed = 5;
 let currentSpeed = 0;
-const speedTransitionDuration = 0.5;
+const speedTransitionDuration = 0.1;
 let mana = 100;
 const maxMana = 100;
-const manaRegenRate = 10;
-const spellCost = 10;
-const BLOOM_SCENE = 1;
+const manaRegenRate = 100;
+
+export class Player {
+    constructor() {
+        this.baseWalkSpeed = walkSpeed;
+        this.baseRunSpeed = runSpeed;
+        this.currentWalkSpeed = this.baseWalkSpeed;
+        this.currentRunSpeed = this.baseRunSpeed;
+        this.speedMultiplier = 1;
+        this.speedBoostEndTime = 0;
+    }
+
+    increaseSpeed(multiplier, duration) {
+        console.log(`Increasing speed by ${multiplier} for ${duration} seconds`);
+        this.speedMultiplier = multiplier;
+        this.speedBoostEndTime = Date.now() + duration * 1000;
+        this.updateSpeed();
+    }
+
+    updateSpeed() {
+        const now = Date.now();
+        if (now > this.speedBoostEndTime) {
+            this.speedMultiplier = 1;
+        }
+        this.currentWalkSpeed = this.baseWalkSpeed * this.speedMultiplier;
+        this.currentRunSpeed = this.baseRunSpeed * this.speedMultiplier;
+        console.log(`Current walk speed: ${this.currentWalkSpeed}, Current run speed: ${this.currentRunSpeed}`);
+    }
+
+    getSpeed(isRunning) {
+        this.updateSpeed();
+        return isRunning ? this.currentRunSpeed : this.currentWalkSpeed;
+    }
+}
+
+export const player = new Player();
 
 export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana, animationsMap) {
     if (!character || !characterBoundingBox) return;
@@ -23,6 +57,10 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
     if (isJumping || velocityY !== 0) {
         velocityY += gravity * delta;
         const verticalMove = new THREE.Vector3(0, velocityY * delta, 0);
+        const isRunning = keysPressed['z'] && keysPressed['shift'];
+        let targetSpeed = player.getSpeed(isRunning);
+
+      currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
 
         if (!checkCollisions(verticalMove, collidableObjects, characterBoundingBox)) {
             character.position.y += verticalMove.y;
@@ -38,11 +76,11 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
         }
     }
 
-    // Determine speed based on the direction of movement
-    let targetSpeed = walkSpeed; // Default to walking speed
-    if (keysPressed['z'] && keysPressed['shift']) { // Run forward if 'shift' is pressed with forward key 'z'
-        targetSpeed = runSpeed;
-    }
+    // Determine if running
+    const isRunning = keysPressed['z'] && keysPressed['shift'];
+
+    // Get the appropriate speed
+    let targetSpeed = player.getSpeed(isRunning);
 
     currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
 
@@ -50,27 +88,25 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
     let direction = new THREE.Vector3();
 
     // Handle movement in different directions
-    if (keysPressed['z']) { // Move forward
+    if (keysPressed['z']) {
         direction.z += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['s']) { // Move backward (only walking, no running)
-        direction.z -= walkSpeed * delta; // Backward movement is restricted to walking speed, regardless of shift key
+    if (keysPressed['s']) {
+        direction.z -= player.currentWalkSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['q']) { // Strafe left
+    if (keysPressed['q']) {
         direction.x += currentSpeed * delta;
         isMoving = true;
     }
-    if (keysPressed['d']) { // Strafe right
+    if (keysPressed['d']) {
         direction.x -= currentSpeed * delta;
         isMoving = true;
     }
 
-    // Apply character rotation to movement direction
     direction.applyQuaternion(character.quaternion);
 
-    // Move character if there are no collisions
     if (!checkCollisions(direction, collidableObjects, characterBoundingBox)) {
         character.position.add(direction);
     }
@@ -79,26 +115,25 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
 
     // Animation handling logic
     if (!isJumping) {
-        let walkAction = animationsMap.get('walking'); // Assume 'walking' is the name of the walking animation
+        let walkAction = animationsMap.get('walking');
+        let runAction = animationsMap.get('running');
 
         if (isMoving) {
-            if (keysPressed['z'] && keysPressed['shift']) { // Running forward
+            if (isRunning) {
                 setAction('running');
-                if (walkAction) walkAction.timeScale = 1; // Normal forward playback speed
-            } else if (keysPressed['s']) { // Walking backward (disable running, enforce walking)
+                if (runAction) runAction.timeScale = player.speedMultiplier;
+            } else if (keysPressed['s']) {
                 setAction('walking');
-                if (walkAction) walkAction.timeScale = -1; // Reverse the walk animation
-            } else { // Walking forward or strafing
+                if (walkAction) walkAction.timeScale = -1;
+            } else {
                 setAction('walking');
-                if (walkAction) walkAction.timeScale = 1; // Normal forward playback
+                if (walkAction) walkAction.timeScale = 1;
             }
-        } else { // Not moving, set idle action
+        } else {
             setAction('idle');
-            if (walkAction) walkAction.timeScale = 1; // Ensure animation is reset to forward speed for future use
         }
     }
 
-    // Update the camera position relative to the character
     updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
 
     // Mana regeneration over time
@@ -128,100 +163,22 @@ export function initiatePunch(character, mixer, animationsMap, setAction, isJump
     }
 }
 
-export function shootSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, activeSpell) {
-    if (mana < spellCost) {
+export function castSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, fireflyCount, spell, enemies) {
+    if (!spell) {
+        console.warn('No spell available.');
+        return null;
+    }
+
+    if (mana < spell.cost) {
         console.warn('Not enough mana to cast spell.');
-        return;
+        return null;
     }
 
-    mana -= spellCost;
+    mana -= spell.cost;
+    updateManaBar(document.getElementById('manaBar'), mana / maxMana);
 
-    let sphereGeometry, sphereMaterial, spellSpeed, scale;
-
-    if (activeSpell === 'blue') {
-        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ffff,
-            emissive: 0x00ffff,
-            emissiveIntensity: 1.5,
-            opacity: 0.5,
-            transparent: true
-        });
-        spellSpeed = 10;
-        scale = 1.5;
-    } else if (activeSpell === 'yellow') {
-        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshStandardMaterial({
-            color: 0xffff00,
-            emissive: 0xffff00,
-            emissiveIntensity: 1.5,
-            opacity: 0.5,
-            transparent: true
-        });
-        spellSpeed = 15;
-        scale = 10;
-    } else if (activeSpell === 'red') {
-        sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-        sphereMaterial = new THREE.MeshStandardMaterial({
-            color: 0xff0000,
-            emissive: 0xff0000,
-            emissiveIntensity: 1.5,
-            opacity: 0.5,
-            transparent: true
-        });
-        spellSpeed = 20;
-        scale = 2.0;
-    }
-
-    const spell = new THREE.Mesh(sphereGeometry, sphereMaterial);
-
-    // Add to bloom layer
-    spell.layers.enable(BLOOM_SCENE);
-
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    forward.y += verticalCorrection;
-    spell.position.copy(character.position).add(new THREE.Vector3(0, shootSourceHeight, 0)).add(forward.clone().multiplyScalar(1));
-    spell.velocity = forward.clone().multiplyScalar(spellSpeed);
-
-    scene.add(spell);
-
-    const spellBoxHelper = new THREE.BoxHelper(spell, sphereMaterial.color.getHex());
-
-    debugHelpers.push(spell);
-    debugHelpers.push(spellBoxHelper);
-
-    let collisionOccurred = false;
-    let collisionTime = 0;
-    const spellAnimation = (delta) => {
-        if (!collisionOccurred) {
-            spell.position.add(spell.velocity.clone().multiplyScalar(delta));
-            spellBoxHelper.update();
-
-            if (checkCollisions(spell.velocity.clone().multiplyScalar(delta), collidableObjects, spell)) {
-                collisionOccurred = true;
-                collisionTime = 0;
-                spell.scale.set(scale, scale, scale);
-            }
-        } else {
-            collisionTime += delta;
-            const spellScale = scale * (1 - collisionTime / 0.5);
-            spell.scale.set(spellScale, spellScale, spellScale);
-
-            if (collisionTime >= 0.5) {
-                scene.remove(spell);
-                scene.remove(spellBoxHelper);
-                return false;
-            }
-        }
-
-        return true;
-    };
-
-    return spellAnimation;
+    return shootSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, fireflyCount, spell, enemies);
 }
-
-
 
 export function updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera) {
     if (!character || !camera) return;
@@ -243,4 +200,17 @@ export function updateCameraPosition(character, cameraPitch, cameraDistance, col
     }
 
     camera.lookAt(character.position);
+}
+
+export function getMana() {
+    return mana;
+}
+
+export function setMana(newMana) {
+    mana = newMana;
+    updateManaBar(document.getElementById('manaBar'), mana / maxMana);
+}
+
+export function getMaxMana() {
+    return maxMana;
 }
