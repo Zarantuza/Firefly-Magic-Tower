@@ -181,21 +181,28 @@ export function createSpellSelectionBar(spells) {
     spellBar.style.padding = '5px';
     spellBar.style.borderRadius = '5px';
 
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9','0'];
+    const keys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à', ')', '='];
+    const displayKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '°', '+'];
     
-    // Add melee attack as the first option
-    const meleeSlot = createSpellSlot('Melee', '&', 0xffffff);
+    // Add melee attack (punch) as the first option
+    const meleeSlot = createSpellSlot('Punch', displayKeys[0], 0xA3A3A3);
+    meleeSlot.dataset.spellIndex = '-1'; // Use -1 for melee attack
+    meleeSlot.dataset.key = '&';
     spellBar.appendChild(meleeSlot);
 
     spells.forEach((spell, index) => {
-        const slot = createSpellSlot(spell.name, keys[index + 1], spell.color);
+        const slot = createSpellSlot(spell.name, displayKeys[index + 1], spell.color);
+        slot.dataset.spellIndex = index.toString();
+        slot.dataset.key = keys[index + 1];
+        slot.style.display = 'none'; // Initially hide all spell slots
         spellBar.appendChild(slot);
     });
 
     document.body.appendChild(spellBar);
+    return spellBar;
 }
 
-function createSpellSlot(spellName, key, color) {
+function createSpellSlot(spellName, displayKey, color) {
     const slot = document.createElement('div');
     slot.style.width = '50px';
     slot.style.height = '50px';
@@ -209,7 +216,7 @@ function createSpellSlot(spellName, key, color) {
     slot.style.cursor = 'pointer';
 
     const keyText = document.createElement('div');
-    keyText.textContent = key;
+    keyText.textContent = displayKey;
     keyText.style.fontSize = '12px';
     keyText.style.color = 'white';
 
@@ -218,35 +225,96 @@ function createSpellSlot(spellName, key, color) {
     nameText.style.fontSize = '10px';
     nameText.style.color = 'white';
     nameText.style.textAlign = 'center';
-
+    
     slot.appendChild(keyText);
     slot.appendChild(nameText);
 
     return slot;
 }
 
-export function updateSpellSelectionBar(fireflyCount) {
+
+
+export function updateSelectedSpell(key) {
+    console.log(`updateSelectedSpell called with key: ${key}`);
     const spellBar = document.getElementById('spellSelectionBar');
-    if (spellBar) {
-        Array.from(spellBar.children).forEach((slot, index) => {
-            if (index === 0) return; // Skip melee attack
-            const spell = spells[index - 1];
-            const isUnlocked = fireflyCount >= spell.firefliesRequired;
-            slot.style.opacity = isUnlocked ? '1' : '0.5';
-            slot.style.cursor = isUnlocked ? 'pointer' : 'not-allowed';
-        });
+    if (!spellBar) {
+        console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
+        return;
+    }
+
+    console.log(`Number of spell slots: ${spellBar.children.length}`);
+
+    let foundMatch = false;
+    Array.from(spellBar.children).forEach((slot, index) => {
+        console.log(`Checking slot ${index}: key=${slot.dataset.key}, display=${slot.style.display}`);
+        if (slot.dataset.key === key && slot.style.display !== 'none') {
+            console.log(`Match found for key ${key}. Highlighting slot ${index}`);
+            highlightSelectedSpell(slot);
+            foundMatch = true;
+        } else {
+            console.log(`No match for key ${key}. Unhighlighting slot ${index}`);
+            unhighlightSpell(slot);
+        }
+    });
+
+    if (!foundMatch) {
+        console.warn(`No visible slot found for key: ${key}`);
     }
 }
 
-export function updateSelectedSpell(index) {
+function highlightSelectedSpell(slot) {
+    //console.log(`Highlighting slot: ${slot.dataset.key}`);
+    slot.style.border = '2px solid white';
+    slot.style.boxShadow = '0 0 10px white';
+    slot.style.transform = 'scale(1.1)';
+    slot.style.transition = 'all 0.3s ease';
+    slot.classList.add('selected-spell');
+}
+
+function unhighlightSpell(slot) {
+    //console.log(`Unhighlighting slot: ${slot.dataset.key}`);
+    slot.style.border = 'none';
+    slot.style.boxShadow = 'none';
+    slot.style.transform = 'scale(1)';
+    slot.style.transition = 'all 0.3s ease';
+    slot.classList.remove('selected-spell');
+}
+
+export function initializeSelectedSpell() {
+    //console.log('Initializing selected spell');
     const spellBar = document.getElementById('spellSelectionBar');
-    if (spellBar) {
-        Array.from(spellBar.children).forEach((slot, i) => {
-            if (i === index) {
-                slot.style.border = '2px solid white';
-            } else {
-                slot.style.border = 'none';
-            }
-        });
+    if (spellBar && spellBar.children.length > 0) {
+        //console.log('Highlighting first spell slot');
+        highlightSelectedSpell(spellBar.children[0]);
+    } else {
+        console.warn('Spell bar not found or empty during initialization');
     }
+}
+
+export function updateSpellSelectionBar(fireflyCount) {
+    //console.log(`Updating spell selection bar. Firefly count: ${fireflyCount}`);
+    const spellBar = document.getElementById('spellSelectionBar');
+    if (!spellBar) {
+        console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
+        return;
+    }
+
+    Array.from(spellBar.children).forEach((slot, index) => {
+        const spellIndex = parseInt(slot.dataset.spellIndex);
+        //console.log(`Updating slot ${index}: spellIndex=${spellIndex}`);
+        if (spellIndex === -1) {
+            slot.style.display = 'flex';
+            console.log('Melee attack slot always displayed');
+            return;
+        }
+        const spell = spells[spellIndex];
+        const isUnlocked = fireflyCount >= spell.firefliesRequired;
+        slot.style.display = isUnlocked ? 'flex' : 'none';
+       //console.log(`Slot ${index} (${spell.name}): isUnlocked=${isUnlocked}, display=${slot.style.display}`);
+
+        if (isUnlocked && slot.classList.contains('selected-spell')) {
+            //console.log(`Maintaining highlight for selected spell: ${spell.name}`);
+            highlightSelectedSpell(slot);
+        }
+    });
 }

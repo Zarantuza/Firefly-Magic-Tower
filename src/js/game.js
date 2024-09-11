@@ -12,6 +12,8 @@ import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateS
 import { getAvailableSpell, spells } from './spells.js';
 import Stats from 'stats.js';
 import { spawnEnemy } from './enemy.js';
+import { NavMesh } from './enemyNavigation.js';
+import { initializeSelectedSpell } from './ui.js';
 
 let navMesh;
 let scene, camera, renderer, mixer, clock;
@@ -36,7 +38,7 @@ let collisionBoxVisible = false;
 let debugLinesVisible = true;
 let currentLevel = 1;
 let nearStairs = false;
-let fireflyCount = 5000;
+let fireflyCount = 30;
 let currentSpell = null;
 let stats;
 let stairsPromptVisible = false;
@@ -143,9 +145,9 @@ function init() {
     createFireflyCounter(fireflyCount);
     createSpellDisplay();
     createStairsPrompt();
-    createSpellSelectionBar(spells);
+    const spellBar = createSpellSelectionBar(spells);
     updateSpellSelectionBar(fireflyCount);
-    updateSelectedSpell(selectedSpellIndex);
+    initializeSelectedSpell();
 
     window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
 
@@ -270,19 +272,17 @@ function handleKeyDown(event) {
     }
     
     const key = event.key.toLowerCase();
-    const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à',')'];
+    const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à', ')','='];
     const index = spellKeys.indexOf(key);
 
     if (index !== -1) {
         if (index === 0 || (spells[index - 1] && fireflyCount >= spells[index - 1].firefliesRequired)) {
             selectedSpellIndex = index;
-            updateSelectedSpell(selectedSpellIndex);
+            updateSelectedSpell(key);  // Changé de selectedSpellIndex à key
         
             // Update spell UI immediately when a new spell is selected
             const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
             updateSpellUI(selectedSpell, fireflyCount);
-
-            
         }
     }
 }

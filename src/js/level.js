@@ -33,12 +33,19 @@ const config = {
     floorNormalStrength: 5, // Strength control for floor normal
     floorDisplacementScale: 0, // Displacement scale for the floor
 
+    stairsTexturePath: '/textures/stones-3.png',
+    stairsNormalMapPath: '/textures/stones-3-normal.png',
+    stairsDisplacementMapPath: '/textures/stones-3-disp.png',
+    stairsTextureRepeat: { x:5, y: 5 },
+    stairsNormalStrength: 0, // Strength control for floor normal
+    stairsDisplacementScale: 0, // Displacement scale for the floor
+
     ceilingTexturePath: '/textures/planks-2.png',
     ceilingNormalMapPath: '/textures/planks-2-normal.png',
     ceilingDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingTextureRepeat: { x: 8, y: 8 },
     ceilingNormalStrength: 0.5, // Strength control for ceiling normal
-    ceilingDisplacementScale: 0.1, // Displacement scale for the ceiling
+    ceilingDisplacementScale: 0.01, // Displacement scale for the ceiling
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
@@ -531,11 +538,11 @@ function placeStairway(scene, collidableObjects, character) {
     stairsPosition.x = x;
     stairsPosition.z = z;
 
-    const columnGeometry = new THREE.CylinderGeometry(1.5, 1.5, 5, 32);
+    const columnGeometry = new THREE.CylinderGeometry(1.5, 1.5, 10, 32);
     const textureLoader = new THREE.TextureLoader();
-    const columnTexture = textureLoader.load(config.columnTexturePath);
-    const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
-    const columnDisplacementMap = textureLoader.load(config.columnDisplacementMapPath);
+    const columnTexture = textureLoader.load(config.stairsTexturePath);
+    const columnNormalMap = textureLoader.load(config.stairsNormalMapPath); 
+    const columnDisplacementMap = textureLoader.load(config.stairsDisplacementMapPath);
 
     columnTexture.wrapS = THREE.RepeatWrapping;
     columnTexture.wrapT = THREE.RepeatWrapping;

@@ -14,6 +14,8 @@ const speedTransitionDuration = 0.1;
 let mana = 100;
 const maxMana = 100;
 const manaRegenRate = 100;
+let canJump = true;
+
 
 export class Player {
     constructor() {
@@ -70,6 +72,7 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
                 velocityY = 0;
                 adjustToGroundLevel(character, collidableObjects);
                 setAction('idle');
+                resetJump();
             } else {
                 velocityY = 0;
             }
@@ -141,9 +144,11 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
     updateMana(mana / maxMana);
 }
 
+
 export function initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed) {
-    if (!isJumping && character) {
+    if (!isJumping && canJump && character) {
         setIsJumping(true);
+        canJump = false;
         velocityY = jumpStrength;
         setAction('jumping');
 
@@ -155,6 +160,11 @@ export function initiateJump(character, mixer, animationsMap, setAction, isJumpi
             }
         }, jumpAction.getClip().duration * 1000);
     }
+}
+
+// Add this function to reset the jump ability when the player touches the ground
+export function resetJump() {
+    canJump = true;
 }
 
 export function initiatePunch(character, mixer, animationsMap, setAction, isJumping) {
