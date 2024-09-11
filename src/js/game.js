@@ -38,7 +38,7 @@ let collisionBoxVisible = false;
 let debugLinesVisible = true;
 let currentLevel = 1;
 let nearStairs = false;
-let fireflyCount = 30;
+let fireflyCount = 3000;
 let currentSpell = null;
 let stats;
 let stairsPromptVisible = false;
@@ -99,8 +99,6 @@ function init() {
     const loader = new GLTFLoader();
     loader.load('/glb/wizardAnimated-v3.glb', (gltf) => {
         character = gltf.scene;
-        character.position.set(0, 0, 0);
-        character.position.y += 1;
 
         scene.add(character);
 
@@ -206,10 +204,15 @@ function init() {
     animate(composer);
 }
 
+let lastSpawnTime = 0;
+const SPAWN_DELAY = 5000; // 5 seconds delay between spawn attempts
+
 function animate(composer) {
     stats.begin();
 
+    const currentTime = Date.now();
     const delta = clock.getDelta();
+
     if (mixer) mixer.update(delta);
     if (character && characterBoundingBox) {
         handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana), animationsMap);
@@ -220,26 +223,18 @@ function animate(composer) {
     checkStairwayProximity();
     checkCollisionsForCollectibles(character, collidableObjects);
 
-    // Update mana UI
     updateManaBar(manaBarElement, getMana() / getMaxMana());
-
-    // Update current spell based on firefly count
     currentSpell = getAvailableSpell(fireflyCount);
-
-    // Update spell UI based on selected spell
     const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
     updateSpellUI(selectedSpell, fireflyCount);
-
-    // Update spell selection bar
     updateSpellSelectionBar(fireflyCount);
 
-    // Update enemies
+    // Update existing enemies
     enemies = enemies.filter(enemy => {
         if (enemy.health > 0) {
             enemy.update(delta);
             return true;
         } else {
-            // Remove dead enemies from the scene
             if (enemy.mesh) {
                 scene.remove(enemy.mesh);
             }
@@ -247,12 +242,16 @@ function animate(composer) {
         }
     });
 
-    // Spawn new enemies if needed
-    while (enemies.length < 5) {
-        const newEnemy = spawnEnemy(scene, collidableObjects, navMesh);
-        if (newEnemy) {
-            enemies.push(newEnemy);
-        }
+    // Spawn new enemies if needed, but only up to the maximum and with a delay
+    const MAX_ENEMIES = 5;
+    if (enemies.length < MAX_ENEMIES && currentTime - lastSpawnTime > SPAWN_DELAY) {
+        spawnEnemy(scene, collidableObjects, navMesh).then(newEnemy => {
+            if (newEnemy) {
+                enemies.push(newEnemy);
+                console.log(`Enemy spawned. Total enemies: ${enemies.length}`);
+            }
+        });
+        lastSpawnTime = currentTime;
     }
 
     composer.render();

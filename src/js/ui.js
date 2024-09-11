@@ -185,13 +185,13 @@ export function createSpellSelectionBar(spells) {
     const displayKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '°', '+'];
     
     // Add melee attack (punch) as the first option
-    const meleeSlot = createSpellSlot('Punch', displayKeys[0], 0xA3A3A3);
+    const meleeSlot = createSpellSlot('Punch', displayKeys[0], 0xA3A3A3, 'img/spells/punch.jpg');
     meleeSlot.dataset.spellIndex = '-1'; // Use -1 for melee attack
     meleeSlot.dataset.key = '&';
     spellBar.appendChild(meleeSlot);
 
     spells.forEach((spell, index) => {
-        const slot = createSpellSlot(spell.name, displayKeys[index + 1], spell.color);
+        const slot = createSpellSlot(spell.name, displayKeys[index + 1], spell.color, spell.iconPath);
         slot.dataset.spellIndex = index.toString();
         slot.dataset.key = keys[index + 1];
         slot.style.display = 'none'; // Initially hide all spell slots
@@ -202,10 +202,10 @@ export function createSpellSelectionBar(spells) {
     return spellBar;
 }
 
-function createSpellSlot(spellName, displayKey, color) {
+function createSpellSlot(spellName, displayKey, color, iconPath) {
     const slot = document.createElement('div');
-    slot.style.width = '50px';
-    slot.style.height = '50px';
+    slot.style.width = '100px';
+    slot.style.height = '100px';
     slot.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
     slot.style.margin = '0 5px';
     slot.style.display = 'flex';
@@ -214,17 +214,39 @@ function createSpellSlot(spellName, displayKey, color) {
     slot.style.alignItems = 'center';
     slot.style.borderRadius = '5px';
     slot.style.cursor = 'pointer';
+    slot.style.position = 'relative';
+    slot.style.overflow = 'hidden';
+
+    // Add background image
+    if (iconPath) {
+        slot.style.backgroundImage = `url(${iconPath})`;
+        slot.style.backgroundSize = 'cover';
+        slot.style.backgroundPosition = 'center';
+    }
+
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    //overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    slot.appendChild(overlay);
 
     const keyText = document.createElement('div');
     keyText.textContent = displayKey;
     keyText.style.fontSize = '12px';
     keyText.style.color = 'white';
+    keyText.style.position = 'relative';
+    keyText.style.zIndex = '1';
 
     const nameText = document.createElement('div');
     nameText.textContent = spellName;
     nameText.style.fontSize = '10px';
     nameText.style.color = 'white';
     nameText.style.textAlign = 'center';
+    nameText.style.position = 'relative';
+    nameText.style.zIndex = '1';
     
     slot.appendChild(keyText);
     slot.appendChild(nameText);

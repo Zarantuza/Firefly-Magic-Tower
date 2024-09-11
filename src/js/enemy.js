@@ -44,37 +44,41 @@ export class Enemy {
         this.navMesh = navMesh;
         this.path = null;
         this.currentPathIndex = 0;
-
-        this.loadModel();
     }
 
-    loadModel() {
-        const loader = new GLTFLoader();
-        loader.load('/glb/goblin.glb', (gltf) => {
-            this.mesh = gltf.scene;
-            this.mesh.position.copy(this.position);
-            this.mesh.scale.set(this.scale, this.scale, this.scale);
+    async loadModel() {
+        return new Promise((resolve, reject) => {
+            const loader = new GLTFLoader();
+            loader.load('/glb/goblin.glb', (gltf) => {
+                this.mesh = gltf.scene;
+                this.mesh.position.copy(this.position);
+                this.mesh.scale.set(this.scale, this.scale, this.scale);
 
-            this.mesh.traverse((child) => {
-                if (child.isMesh) {
-                    child.material = child.material.clone();
-                    child.material.color.setHex(ENEMY_TYPES[this.type].color);
-                }
+                this.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = child.material.clone();
+                        child.material.color.setHex(ENEMY_TYPES[this.type].color);
+                    }
+                });
+
+                this.scene.add(this.mesh);
+
+                this.mixer = new THREE.AnimationMixer(this.mesh);
+
+                gltf.animations.forEach((clip) => {
+                    const action = this.mixer.clipAction(clip);
+                    this.animationsMap.set(clip.name.toLowerCase(), action);
+                });
+
+                this.setAction('idle');
+                this.isLoaded = true;
+                adjustToGroundLevel(this.mesh, this.collidableObjects);
+                this.findNewTarget();
+                resolve(this);
+            }, undefined, (error) => {
+                console.error('An error happened while loading the enemy model:', error);
+                reject(error);
             });
-
-            this.scene.add(this.mesh);
-
-            this.mixer = new THREE.AnimationMixer(this.mesh);
-
-            gltf.animations.forEach((clip) => {
-                const action = this.mixer.clipAction(clip);
-                this.animationsMap.set(clip.name.toLowerCase(), action);
-            });
-
-            this.setAction('idle');
-            this.isLoaded = true;
-            adjustToGroundLevel(this.mesh, this.collidableObjects);
-            this.findNewTarget();
         });
     }
 
@@ -151,22 +155,26 @@ export class Enemy {
 }
 
 export function spawnEnemy(scene, collidableObjects, navMesh) {
-    const cellSize = 10;
-    const gridSize = 4;
+    return new Promise((resolve, reject) => {
+        const cellSize = 10;
+        const gridSize = 4;
 
-    const randomX = Math.floor(Math.random() * gridSize) * cellSize + cellSize / 2;
-    const randomZ = Math.floor(Math.random() * gridSize) * cellSize + cellSize / 2;
-    const position = new THREE.Vector3(randomX, 0, randomZ);
+        const randomX = Math.floor(Math.random() * gridSize) * cellSize + cellSize / 2;
+        const randomZ = Math.floor(Math.random() * gridSize) * cellSize + cellSize / 2;
+        const position = new THREE.Vector3(randomX, 1.05, randomZ);
 
-    const enemyTypes = Object.keys(ENEMY_TYPES);
-    const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+        const enemyTypes = Object.keys(ENEMY_TYPES);
+        const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
 
-    console.log(`Spawning ${randomType} enemy at:`, position);
-    
-    try {
-        return new Enemy(scene, position, collidableObjects, randomType, navMesh);
-    } catch (error) {
-        console.error('Error spawning enemy:', error);
-        return null;
-    }
+        console.log(`Attempting to spawn ${randomType} enemy at: ${position.toString()}`);
+        
+        const enemy = new Enemy(scene, position, collidableObjects, randomType, navMesh);
+        enemy.loadModel().then(() => {
+            console.log(`Successfully spawned ${randomType} enemy at: ${position.toString()}`);
+            resolve(enemy);
+        }).catch((error) => {
+            console.error('Error spawning enemy:', error);
+            resolve(null);
+        });
+    });
 }

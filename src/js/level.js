@@ -1,11 +1,12 @@
+// level.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { fadeToBlack, createRNG } from './utils.js';
 import { loadNextLevel } from './game.js';
 import { NavMesh } from './enemyNavigation.js';
-import { spawnEnemy } from './enemy.js';  // Add this line
+import { spawnEnemy } from './enemy.js';
 import { player } from './player.js';
-
+import { placeItems } from './items.js';  // Import the new placeItems function
 
 // Configuration parameters
 const config = {
@@ -14,7 +15,6 @@ const config = {
     cellSize: 10,
     wallHeight: 5,
     wallThickness: 0.5,
-    numPotions: 5,
     numFireflies: 10,
 
     potions: {
@@ -23,59 +23,57 @@ const config = {
         SMALL_MANA_POTION: 2,
         BIG_MANA_POTION: 1,
         SMALL_SPEED_POTION: 2,
-        BIG_SPEED_POTION: 10
+        BIG_SPEED_POTION: 1
     },
 
     floorTexturePath: '/textures/stones-3.png',
     floorNormalMapPath: '/textures/stones-3-normal.png',
     floorDisplacementMapPath: '/textures/stones-3-disp.png',
-    floorTextureRepeat: { x:4, y: 4 },
-    floorNormalStrength: 5, // Strength control for floor normal
-    floorDisplacementScale: 0, // Displacement scale for the floor
+    floorTextureRepeat: { x: 4, y: 4 },
+    floorNormalStrength: 5,
+    floorDisplacementScale: 0,
 
     stairsTexturePath: '/textures/stones-3.png',
     stairsNormalMapPath: '/textures/stones-3-normal.png',
     stairsDisplacementMapPath: '/textures/stones-3-disp.png',
-    stairsTextureRepeat: { x:5, y: 5 },
-    stairsNormalStrength: 0, // Strength control for floor normal
-    stairsDisplacementScale: 0, // Displacement scale for the floor
+    stairsTextureRepeat: { x: 5, y: 5 },
+    stairsNormalStrength: 0,
+    stairsDisplacementScale: 0,
 
     ceilingTexturePath: '/textures/planks-2.png',
     ceilingNormalMapPath: '/textures/planks-2-normal.png',
     ceilingDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingTextureRepeat: { x: 8, y: 8 },
-    ceilingNormalStrength: 0.5, // Strength control for ceiling normal
-    ceilingDisplacementScale: 0.01, // Displacement scale for the ceiling
+    ceilingNormalStrength: 0.5,
+    ceilingDisplacementScale: 0.01,
 
     wallTexturePath: '/textures/planks-1.png',
     wallNormalMapPath: '/textures/planks-1-normal.png',
     wallDisplacementMapPath: '/textures/planks-2-disp.png',
     wallTextureRepeat: { x: 1, y: 1 },
-    wallNormalStrength: 0.1, // Strength control for wall normal
-    wallDisplacementScale: 0.5, // Displacement scale for the walls
+    wallNormalStrength: 0.1,
+    wallDisplacementScale: 0.5,
 
     verticalBeamTexturePath: '/textures/wall-3.png',
     verticalBeamNormalMapPath: '/textures/wall-3-normal.png',
     verticalBeamDisplacementMapPath: '/textures/wall-3-disp.png',
     verticalBeamTextureRepeat: { x: 0.1, y: 1 },
-    verticalBeamNormalStrength: 0, // Strength control for vertical beams
-    verticalBeamDisplacementScale: 0.5, // Displacement scale for vertical beams
+    verticalBeamNormalStrength: 0,
+    verticalBeamDisplacementScale: 0.5,
 
     ceilingBeamTexturePath: '/textures/wall-1.png',
     ceilingBeamNormalMapPath: '/textures/wall-1-normal.png',
     ceilingBeamDisplacementMapPath: '/textures/wall-1-disp.png',
     ceilingBeamTextureRepeat: { x: 2, y: 2 },
-    ceilingBeamNormalStrength: 0.6, // Strength control for ceiling beams
-    ceilingBeamDisplacementScale: 0.05, // Displacement scale for ceiling beams
+    ceilingBeamNormalStrength: 0.6,
+    ceilingBeamDisplacementScale: 0.05,
 
     columnTexturePath: '/textures/wood-1.png',
     columnNormalMapPath: '/textures/wood-1-normal.png',
     columnDisplacementMapPath: '/textures/wood-1-disp.png',
     columnTextureRepeat: { x: 1, y: 1 },
-    columnNormalStrength: 0.9, // Strength control for columns
-    columnDisplacementScale: 0.2, // Displacement scale for columns
-
-    potionModelPath: '/glb/Mana_small_Potion.glb',
+    columnNormalStrength: 0.9,
+    columnDisplacementScale: 0.2,
 
     lightIntensity: 4,
     lightColor: 0xFFAA00,
@@ -85,86 +83,25 @@ const config = {
     floatingObjectHeight: 0.5,
 };
 
-//configuration des object collectibles
-const ITEM_TYPES = {
-    SMALL_LIFE_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => { 
-            console.log("Healing player for 20");
-            // Assurez-vous que player.heal est défini dans la classe Player
-            if (typeof player.heal === 'function') player.heal(20);
-        }, 
-        color: 0xff0000 
-    },
-    BIG_LIFE_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => {
-            console.log("Healing player for 50");
-            if (typeof player.heal === 'function') player.heal(50);
-        }, 
-        color: 0xff3333 
-    },
-    SMALL_MANA_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => {
-            console.log("Increasing player mana by 20");
-            if (typeof player.increaseMana === 'function') player.increaseMana(20);
-        }, 
-        color: 0x0000ff 
-    },
-    BIG_MANA_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => {
-            console.log("Increasing player mana by 50");
-            if (typeof player.increaseMana === 'function') player.increaseMana(50);
-        }, 
-        color: 0x3333ff 
-    },
-    SMALL_SPEED_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => {
-            console.log("Increasing player speed by 1.2 for 10 seconds");
-            if (typeof player.increaseSpeed === 'function') player.increaseSpeed(1.2, 10);
-        }, 
-        color: 0x00ff00 
-    },
-    BIG_SPEED_POTION: { 
-        mesh: config.potionModelPath, 
-        effect: (player) => {
-            console.log("Increasing player speed by 1.5 for 15 seconds");
-            if (typeof player.increaseSpeed === 'function') player.increaseSpeed(1.5, 15);
-        }, 
-        color: 0x33ff33 
-    },
-    FIREFLY: { 
-        mesh: null, 
-        effect: (player) => {
-            console.log("Player collected a firefly");
-            if (typeof player.collectFirefly === 'function') player.collectFirefly();
-        }
-    }
-};
-
 let gridRows = config.gridRows;
 let gridCols = config.gridCols;
 const cellSize = config.cellSize;
 let navMesh;
-let collectiblePool = null;
 let occupiedPositions = new Set();
-
-
 
 let maze = [];
 let stairsPosition = { x: 0, z: 0 };
 
-export async function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies = []) {
+export async function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies) {
+    console.log("Starting to create new level");
+
+    // Clear existing objects and enemies
     collidableObjects.forEach(obj => disposeObject(obj, scene));
     collidableObjects.length = 0;
     collisionHelpers.forEach(helper => disposeObject(helper, scene));
     collisionHelpers.length = 0;
     debugHelpers.length = 0;
 
-    // Clear existing enemies
     enemies.forEach(enemy => {
         if (enemy.mesh) {
             scene.remove(enemy.mesh);
@@ -176,8 +113,9 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     createMazeGeometry(scene, collidableObjects);
     stairsPosition = placeStairway(scene, collidableObjects, character);
     createRoof(scene, collidableObjects);
+    
     console.log("About to place items...");
-    placeItems(scene, collidableObjects, player);
+    await placeItems(scene, collidableObjects, player, config, getRandomPosition);
     addCastleLights(scene);
     console.log("Items placed.");
 
@@ -186,40 +124,78 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
         navMesh = new NavMesh(maze);
 
         // Spawn new enemies
-        for (let i = 0; i < 5; i++) {
-            const newEnemy = await spawnEnemy(scene, collidableObjects, navMesh);
-            if (newEnemy) {
-                enemies.push(newEnemy);
-            }
+        const MAX_ENEMIES = 5;
+        const enemyPromises = [];
+        for (let i = 0; i < MAX_ENEMIES; i++) {
+            enemyPromises.push(spawnEnemy(scene, collidableObjects, navMesh));
         }
+
+        const newEnemies = await Promise.all(enemyPromises);
+        newEnemies.forEach(enemy => {
+            if (enemy) {
+                enemies.push(enemy);
+            }
+        });
+
+        console.log(`Number of enemies created: ${enemies.length}`);
     } catch (error) {
         console.error('Error creating NavMesh or spawning enemies:', error);
     }
+    placePlayer(character, characterBoundingBox);
 
     fadeToBlack(scene, clock, () => {
-        placePlayer(scene, character, characterBoundingBox);
     });
 
+    console.log("Level creation completed");
     return stairsPosition;
 }
 
-export function placePlayer(scene, character, characterBoundingBox) {
-    if (character && characterBoundingBox) {
-        let spawnPosition = getRandomFreePosition();
-        character.position.set(spawnPosition.x, 1, spawnPosition.z);
-        characterBoundingBox.updateMatrixWorld();
-    } else {
+export function placePlayer(character, characterBoundingBox) {
+    if (!character || !characterBoundingBox) {
         console.error("Character or Character BoundingBox is not defined.");
+        return;
     }
+
+    // Place the player at the center of the first cell
+    const spawnPosition = {
+        x: config.cellSize/2 ,
+        y: 1.05,  // Slightly above the floor
+        z: config.cellSize/2 
+    };
+    
+    character.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
+    
+    // Determine the initial orientation based on the open paths
+    const firstCell = maze[0][0];
+    let rotation = 0;
+    
+    if (!firstCell.east) {
+        rotation = 0; // Face east
+    } else if (!firstCell.south) {
+        rotation = Math.PI / 2; // Face south
+    } else if (!firstCell.west) {
+        rotation = Math.PI; // Face west
+    } else if (!firstCell.north) {
+        rotation = -Math.PI / 2; // Face north
+    }
+    
+    character.rotation.y = rotation;
+    
+    characterBoundingBox.updateMatrixWorld();
+    
+    console.log(`Player spawned at: (${spawnPosition.x}, ${spawnPosition.y}, ${spawnPosition.z}) with rotation: ${rotation}`);
 }
 
 function getRandomFreePosition() {
-    let freePositions = [];
+    const freePositions = [];
 
     for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
-            const position = { x: col * cellSize + cellSize / 2, z: row * cellSize + cellSize / 2 };
-            if (!isPositionInWall(position)) {
+            const position = { 
+                x: col * cellSize + cellSize / 2, 
+                z: row * cellSize + cellSize / 2 
+            };
+            if (!isPositionInWall(position) && !isPositionOccupied(position.x, position.z)) {
                 freePositions.push(position);
             }
         }
@@ -230,8 +206,8 @@ function getRandomFreePosition() {
         return { x: cellSize / 2, z: cellSize / 2 }; // Fallback to the center of the first cell
     }
 
-    const rng = Math.floor(Math.random() * freePositions.length);
-    return freePositions[rng];
+    const randomIndex = Math.floor(Math.random() * freePositions.length);
+    return freePositions[randomIndex];
 }
 
 function isPositionInWall(position) {
@@ -525,7 +501,6 @@ function createWall(scene, x, y, z, width, height, depth, material, collidableOb
     scene.add(wall);
     collidableObjects.push(wall);
 }
-
 function placeStairway(scene, collidableObjects, character) {
     let randomRow, randomCol, x, z;
     do {
@@ -635,12 +610,10 @@ function onLevelUpKeyPress(event) {
 function createRoof(scene, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
 
-    // Load ceiling textures
     const ceilingTexture = textureLoader.load(config.ceilingTexturePath);
     const ceilingNormalMap = textureLoader.load(config.ceilingNormalMapPath);
     const ceilingDisplacementMap = textureLoader.load(config.ceilingDisplacementMapPath);
 
-    // Repeat texture if needed
     ceilingTexture.wrapS = THREE.RepeatWrapping;
     ceilingTexture.wrapT = THREE.RepeatWrapping;
     ceilingTexture.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
@@ -653,30 +626,26 @@ function createRoof(scene, collidableObjects) {
     ceilingDisplacementMap.wrapT = THREE.RepeatWrapping;
     ceilingDisplacementMap.repeat.set(config.ceilingTextureRepeat.x, config.ceilingTextureRepeat.y);
 
-    // Use MeshLambertMaterial for the ceiling with normal and displacement maps
     const roofMaterial = new THREE.MeshPhongMaterial({
         map: ceilingTexture,
         normalMap: ceilingNormalMap,
         normalScale: new THREE.Vector2(config.ceilingNormalStrength, config.ceilingNormalStrength),
         displacementMap: ceilingDisplacementMap,
         displacementScale: config.ceilingDisplacementScale,
-        side: THREE.DoubleSide // Render both faces of the plane
+        side: THREE.DoubleSide
     });
 
     const roofGeometry = new THREE.PlaneGeometry(config.gridCols * config.cellSize, config.gridRows * config.cellSize);
 
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
 
-    // Set the position
     roof.position.set((config.gridCols * cellSize) / 2, config.wallHeight*1.3, (config.gridRows * cellSize) / 2);
 
-    // Rotate the roof upside down
     roof.rotation.x = -Math.PI / 2;
 
     scene.add(roof);
     collidableObjects.push(roof);
 }
-
 
 function disposeObject(obj, scene) {
     if (obj.geometry) obj.geometry.dispose();
@@ -684,35 +653,11 @@ function disposeObject(obj, scene) {
     scene.remove(obj);
 }
 
-function placeItems(scene, collidableObjects, player) {
-    console.log("Starting to place items...");
-    const loader = new GLTFLoader();
+function getRandomPosition() {
     const rng = createRNG(Date.now().toString());
-    occupiedPositions.clear();
-
-    Object.entries(ITEM_TYPES).forEach(([itemType, itemData]) => {
-        const count = itemType === 'FIREFLY' ? config.numFireflies : (config.potions[itemType] || 0);
-        console.log(`Attempting to place ${count} ${itemType}`);
-
-        for (let i = 0; i < count; i++) {
-            const { x, z } = getRandomPosition(rng);
-            console.log(`Placing ${itemType} at position (${x}, ${z})`);
-
-            if (itemType === 'FIREFLY') {
-                placeFirefly(scene, collidableObjects, x, z, player);
-            } else {
-                placePotionModel(loader, scene, collidableObjects, x, z, itemType, itemData, player);
-            }
-        }
-    });
-
-    console.log("Finished placing items.");
-}
-
-function getRandomPosition(rng) {
     let x, z;
     let attempts = 0;
-    const maxAttempts = 100; // Évite une boucle infinie
+    const maxAttempts = 100;
 
     do {
         const randomRow = Math.floor(rng() * config.gridRows);
@@ -730,78 +675,8 @@ function getRandomPosition(rng) {
     occupiedPositions.add(`${Math.floor(x)},${Math.floor(z)}`);
     return { x, z };
 }
-
 function isPositionOccupied(x, z) {
     return occupiedPositions.has(`${Math.floor(x)},${Math.floor(z)}`);
-}
-
-function placeFirefly(scene, collidableObjects, x, z, player) {
-    const fireflyGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-    const fireflyMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const firefly = new THREE.Mesh(fireflyGeometry, fireflyMaterial);
-    firefly.position.set(x, 1.5, z);
-    firefly.name = `Firefly_${x}_${z}`;
-
-    firefly.userData = {
-        type: 'FIREFLY',
-        isCollectible: true,
-        isCollected: false,
-        collect: function () {
-            if (!this.isCollected) {
-                this.isCollected = true;
-                ITEM_TYPES.FIREFLY.effect(player);
-                scene.remove(firefly);
-                collidableObjects.splice(collidableObjects.indexOf(firefly), 1);
-            }
-        }
-    };
-
-    collidableObjects.push(firefly);
-    scene.add(firefly);
-}
-
-function placePotionModel(loader, scene, collidableObjects, x, z, itemType, itemData, player) {
-    if (x === null || z === null) {
-        console.warn(`Could not place ${itemType} due to lack of free space`);
-        return;
-    }
-    console.log(`Loading model for ${itemType}...`);
-    loader.load(itemData.mesh, (gltf) => {
-        console.log(`Model for ${itemType} loaded successfully.`);
-        const potion = gltf.scene;
-        potion.name = `${itemType}_${x}_${z}`;
-        potion.scale.set(0.25, 0.25, 0.25);
-        potion.position.set(x, 1.5, z);
-
-        // Appliquer la couleur à la potion
-        potion.traverse((child) => {
-            if (child.isMesh) {
-                child.material = child.material.clone();
-                child.material.color.setHex(itemData.color);
-            }
-        });
-
-        potion.userData = {
-            type: itemType,
-            isCollectible: true,
-            isCollected: false,
-            collect: function () {
-                if (!this.isCollected) {
-                    this.isCollected = true;
-                    itemData.effect(player); // Appel correct de l'effet
-                    scene.remove(potion);
-                    collidableObjects.splice(collidableObjects.indexOf(potion), 1);
-                    console.log(`${itemType} collected and removed from scene.`);
-                }
-            }
-        };
-
-        collidableObjects.push(potion);
-        scene.add(potion);
-        console.log(`${itemType} added to scene at position (${x}, ${z})`);
-    }, undefined, (error) => {
-        console.error(`Error loading model for ${itemType}:`, error);
-    });
 }
 
 export function checkCollisionsForCollectibles(character, collidableObjects) {
@@ -814,7 +689,6 @@ export function checkCollisionsForCollectibles(character, collidableObjects) {
         }
     });
 }
-
 
 function addCastleLights(scene) {
     const lightPositions = [
@@ -841,3 +715,4 @@ function addCastleLights(scene) {
     scene.add(ambientLight);
 }
 
+export { config };
