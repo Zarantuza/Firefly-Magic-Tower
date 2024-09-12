@@ -28,7 +28,7 @@ export class Player {
     }
 
     increaseSpeed(multiplier, duration) {
-        console.log(`Increasing speed by ${multiplier} for ${duration} seconds`);
+        //console.log(`Increasing speed by ${multiplier} for ${duration} seconds`);
         this.speedMultiplier = multiplier;
         this.speedBoostEndTime = Date.now() + duration * 1000;
         this.updateSpeed();
@@ -41,7 +41,7 @@ export class Player {
         }
         this.currentWalkSpeed = this.baseWalkSpeed * this.speedMultiplier;
         this.currentRunSpeed = this.baseRunSpeed * this.speedMultiplier;
-        console.log(`Current walk speed: ${this.currentWalkSpeed}, Current run speed: ${this.currentRunSpeed}`);
+        //console.log(`Current walk speed: ${this.currentWalkSpeed}, Current run speed: ${this.currentRunSpeed}`);
     }
 
     getSpeed(isRunning) {

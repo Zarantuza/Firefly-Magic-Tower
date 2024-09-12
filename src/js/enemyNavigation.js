@@ -10,7 +10,7 @@ export class NavMesh {
         this.maze = maze;
     this.grid = this.createNavigationGrid();
     this.nodes = this.createNodes();
-    console.log(`NavMesh initialized with ${this.nodes.length} nodes`);
+    ////console.log(`NavMesh initialized with ${this.nodes.length} nodes`);
     }
 
     createNodes() {
@@ -32,13 +32,13 @@ export class NavMesh {
                 }
             }
         }
-        console.log(`Created ${nodes.length} nodes`);
+        //console.log(`Created ${nodes.length} nodes`);
         return nodes;
     }
 
     getRandomNode() {
         if (!this.nodes || this.nodes.length === 0) {
-            console.warn('No nodes available in NavMesh');
+            //console.warn('No nodes available in NavMesh');
             return null;
         }
         return this.nodes[Math.floor(Math.random() * this.nodes.length)];
@@ -107,7 +107,7 @@ export class NavMesh {
             if (current.row === endCell.row && current.col === endCell.col) {
                 return this.reconstructPath(cameFrom, current);
             }
-
+           
             openSet.splice(openSet.indexOf(current), 1);
 
             for (const neighbor of this.getNeighbors(current)) {

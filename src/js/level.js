@@ -68,18 +68,25 @@ const config = {
     ceilingBeamNormalStrength: 0.6,
     ceilingBeamDisplacementScale: 0.05,
 
-    columnTexturePath: '/textures/wood-1.png',
-    columnNormalMapPath: '/textures/wood-1-normal.png',
-    columnDisplacementMapPath: '/textures/wood-1-disp.png',
-    columnTextureRepeat: { x: 1, y: 1 },
+    columnTexturePath: '/textures/stones-3.png',
+    columnNormalMapPath: '/textures/stones-3-normal.png',
+    columnDisplacementMapPath: '/textures/stones-3.png',
+    columnTextureRepeat: { x: 3, y: 3 },
     columnNormalStrength: 0.9,
     columnDisplacementScale: 0.2,
 
-    lightIntensity: 4,
+    stairsTexturePath: '/textures/wood-1.png',
+    stairsNormalMapPath: '/textures/wood-1-normal.png',
+    stairsDisplacementMapPath: '/textures/wood-1-disp.png',
+    stairsTextureRepeat: { x: 0.2, y: 0.2 },
+    stairsNormalStrength: 0,
+    stairsDisplacementScale: 0,
+
+    lightIntensity: 8,
     lightColor: 0xFFAA00,
-    ambientLightIntensity: 0,
+    ambientLightIntensity: 0.2,
     shadowMapSize: 1024,
-    floatingObjectSpeedRange: [0.3, 0.9],
+    floatingObjectSpeedRange: [0.3, 5],
     floatingObjectHeight: 0.5,
 };
 
@@ -94,7 +101,7 @@ let maze = [];
 let stairsPosition = { x: 0, z: 0 };
 
 export async function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies) {
-    console.log("Starting to create new level");
+    //console.log("Starting to create new level");
 
     // Clear existing objects and enemies
     collidableObjects.forEach(obj => disposeObject(obj, scene));
@@ -115,10 +122,11 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     stairsPosition = placeStairway(scene, collidableObjects, character);
     createRoof(scene, collidableObjects);
     
-    console.log("About to place items...");
-    await placeItems(scene, collidableObjects, player, config, getRandomPosition);
+    //console.log("About to place items...");
+    await placeItems(scene, collidableObjects, { addFirefly, collectFirefly: player.collectFirefly }, config, getRandomPosition);
+
     addCastleLights(scene);
-    console.log("Items placed.");
+    //console.log("Items placed.");
 
     
 
@@ -126,9 +134,9 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
         
         // Create NavMesh
         navMesh = new NavMesh(maze);
-        console.log("NavMesh created:", navMesh);
+        //console.log("NavMesh created:", navMesh);
         visualizeNavMesh(scene, navMesh);
-        console.log("NavMesh created:", navMesh);
+        //console.log("NavMesh created:", navMesh);
         
         
 
@@ -137,18 +145,18 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
         const enemyPromises = [];
         for (let i = 0; i < MAX_ENEMIES; i++) {
             enemyPromises.push(spawnEnemy(scene, collidableObjects, navMesh));
-            console.log (`Spawning enemy ${i+1} of ${MAX_ENEMIES}`);
+            //console.log (`Spawning enemy ${i+1} of ${MAX_ENEMIES}`);
         }
 
         const newEnemies = await Promise.all(enemyPromises);
         newEnemies.forEach(enemy => {
             if (enemy) {
                 enemies.push(enemy);
-                console.log("Enemy added to scene:", enemy);
+                //console.log("Enemy added to scene:", enemy);
             }
         });
 
-        console.log(`Number of enemies created: ${enemies.length}`);
+        //console.log(`Number of enemies created: ${enemies.length}`);
     } catch (error) {
         console.error('Error creating NavMesh or spawning enemies:', error);
     }
@@ -157,7 +165,7 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     fadeToBlack(scene, clock, () => {
     });
 
-    console.log("Level creation completed");
+    //console.log("Level creation completed");
     return { stairsPosition, navMesh };
 }
 
@@ -194,7 +202,7 @@ export function placePlayer(character, characterBoundingBox) {
     
     characterBoundingBox.updateMatrixWorld();
     
-    console.log(`Player spawned at: (${spawnPosition.x}, ${spawnPosition.y}, ${spawnPosition.z}) with rotation: ${rotation}`);
+    //console.log(`Player spawned at: (${spawnPosition.x}, ${spawnPosition.y}, ${spawnPosition.z}) with rotation: ${rotation}`);
 }
 
 function getRandomFreePosition() {
@@ -540,25 +548,24 @@ function placeStairway(scene, collidableObjects, character) {
 
     const columnGeometry = new THREE.CylinderGeometry(1.5, 1.5, 10, 32);
     const textureLoader = new THREE.TextureLoader();
-    const columnTexture = textureLoader.load(config.stairsTexturePath);
-    const columnNormalMap = textureLoader.load(config.stairsNormalMapPath); 
-    const columnDisplacementMap = textureLoader.load(config.stairsDisplacementMapPath);
+    
+    // Column textures
+    const columnTexture = textureLoader.load(config.columnTexturePath);
+    const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
+    const columnDisplacementMap = textureLoader.load(config.columnDisplacementMapPath);
 
-    columnTexture.wrapS = THREE.RepeatWrapping;
-    columnTexture.wrapT = THREE.RepeatWrapping;
+    columnTexture.wrapS = columnTexture.wrapT = THREE.RepeatWrapping;
+    columnNormalMap.wrapS = columnNormalMap.wrapT = THREE.RepeatWrapping;
+    columnDisplacementMap.wrapS = columnDisplacementMap.wrapT = THREE.RepeatWrapping;
+
     columnTexture.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
-
-    columnNormalMap.wrapS = THREE.RepeatWrapping;
-    columnNormalMap.wrapT = THREE.RepeatWrapping;
     columnNormalMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
-
-    columnDisplacementMap.wrapS = THREE.RepeatWrapping;
-    columnDisplacementMap.wrapT = THREE.RepeatWrapping;
     columnDisplacementMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
 
     const columnMaterial = new THREE.MeshPhongMaterial({
         map: columnTexture,
         normalMap: columnNormalMap,
+        normalScale: new THREE.Vector2(config.columnNormalStrength, config.columnNormalStrength),
         displacementMap: columnDisplacementMap,
         displacementScale: config.columnDisplacementScale,
     });
@@ -568,10 +575,31 @@ function placeStairway(scene, collidableObjects, character) {
     scene.add(column);
     collidableObjects.push(column);
 
+    // Stairs textures
+    const stairsTexture = textureLoader.load(config.stairsTexturePath);
+    const stairsNormalMap = textureLoader.load(config.stairsNormalMapPath);
+    const stairsDisplacementMap = textureLoader.load(config.stairsDisplacementMapPath);
+
+    stairsTexture.wrapS = stairsTexture.wrapT = THREE.RepeatWrapping;
+    stairsNormalMap.wrapS = stairsNormalMap.wrapT = THREE.RepeatWrapping;
+    stairsDisplacementMap.wrapS = stairsDisplacementMap.wrapT = THREE.RepeatWrapping;
+
+    stairsTexture.repeat.set(config.stairsTextureRepeat.x, config.stairsTextureRepeat.y);
+    stairsNormalMap.repeat.set(config.stairsTextureRepeat.x, config.stairsTextureRepeat.y);
+    stairsDisplacementMap.repeat.set(config.stairsTextureRepeat.x, config.stairsTextureRepeat.y);
+
+    const stairsMaterial = new THREE.MeshPhongMaterial({
+        map: stairsTexture,
+        normalMap: stairsNormalMap,
+        normalScale: new THREE.Vector2(config.stairsNormalStrength, config.stairsNormalStrength),
+        displacementMap: stairsDisplacementMap,
+        displacementScale: config.stairsDisplacementScale,
+    });
+
     const steps = Math.ceil(5 / 0.2);
     for (let i = 0; i < steps; i++) {
         const stepGeometry = new THREE.BoxGeometry(1.5, 0.2, 0.5);
-        const step = new THREE.Mesh(stepGeometry, columnMaterial);
+        const step = new THREE.Mesh(stepGeometry, stairsMaterial);
         const angle = (i * 2 * Math.PI) / steps;
         step.position.set(
             x + Math.cos(angle) * 1.5,
@@ -617,14 +645,15 @@ function displayStairwayPrompt() {
     prompt.style.left = '50%';
     prompt.style.transform = 'translate(-50%, -50%)';
     prompt.style.color = '#ffffff';
-    prompt.style.fontFamily = 'Pixelated';
-    prompt.style.fontSize = '24px';
+    prompt.style.fontFamily = 'Vinque';  // Use the 'Vinque' font
+    prompt.style.fontSize = '30px';
     document.body.appendChild(prompt);
 
     setTimeout(() => {
         document.body.removeChild(prompt);
     }, 3000);
 }
+
 
 function onLevelUpKeyPress(event) {
     if (event.key === 'Enter') {
@@ -692,7 +721,7 @@ function getRandomPosition() {
         attempts++;
 
         if (attempts > maxAttempts) {
-            console.warn("Could not find a free position after max attempts");
+            //console.warn("Could not find a free position after max attempts");
             return null;
         }
     } while (isPositionOccupied(x, z) || isPositionInWall({ x, z }));

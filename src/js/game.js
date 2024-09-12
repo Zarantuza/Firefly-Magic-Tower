@@ -8,7 +8,7 @@ import { createLevel, checkCollisionsForCollectibles } from './level.js';
 import { handlePlayerMovement, initiateJump, initiatePunch, castSpell, updateCameraPosition, getMana, setMana, getMaxMana } from './player.js';
 import { onWindowResize, onMouseMove, onMouseWheel } from './utils.js';
 import { checkCollisions } from './collision.js';
-import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createCollisionBoxToggleButton, createDebugLinesToggleButton, createFireflyCounter, updateFireflyCounter, createSpellDisplay, updateSpellUI, createSpellSelectionBar, updateSelectedSpell, updateSpellSelectionBar } from './ui.js';
+import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createFireflyCounter, updateFireflyCounter, createSpellDisplay, updateSpellUI, createSpellSelectionBar, updateSelectedSpell, updateSpellSelectionBar } from './ui.js';
 import { getAvailableSpell, spells } from './spells.js';
 import Stats from 'stats.js';
 import { spawnEnemy } from './enemy.js';
@@ -38,7 +38,7 @@ let collisionBoxVisible = false;
 let debugLinesVisible = true;
 let currentLevel = 1;
 let nearStairs = false;
-let fireflyCount = 3000;
+let fireflyCount = 50;
 let currentSpell = null;
 let stats;
 let stairsPromptVisible = false;
@@ -67,11 +67,14 @@ async function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 3, -cameraDistance);
 
+    
+
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));   
     renderer.outputEncoding = THREE.sRGBEncoding;
-
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Optional: for softer shadows
     document.body.appendChild(renderer.domElement);
 
     const composer = new EffectComposer(renderer);
@@ -80,14 +83,6 @@ async function init() {
 
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
-
-    const light1 = new THREE.DirectionalLight(0xfff5e1, 0.8);
-    light1.position.set(10, 20, 10);
-    scene.add(light1);
-
-    const light2 = new THREE.DirectionalLight(0xe1f0ff, 0.8);
-    light2.position.set(-10, 20, -10);
-    scene.add(light2);
 
     const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
     scene.add(ambientLight);
@@ -131,31 +126,29 @@ async function init() {
 
     const { stairsPosition, navMesh } = await createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies);
     
-    console.log("NavMesh received:", navMesh);
+    //console.log("NavMesh received:", navMesh);
 
     // Spawn enemies using the navMesh
     const MAX_ENEMIES = 5;
     for (let i = 0; i < MAX_ENEMIES; i++) {
-        console.log(`Spawning enemy ${i + 1} of ${MAX_ENEMIES}`);
+        //console.log(`Spawning enemy ${i + 1} of ${MAX_ENEMIES}`);
         const enemy = await spawnEnemy(scene, collidableObjects, navMesh);
         if (enemy) {
             enemies.push(enemy);
-            console.log(`Enemy ${i + 1} spawned successfully`);
+            //console.log(`Enemy ${i + 1} spawned successfully`);
         } else {
-            console.log(`Failed to spawn enemy ${i + 1}`);
+            //console.log(`Failed to spawn enemy ${i + 1}`);
         }
     }
 
-    console.log(`Number of enemies created: ${enemies.length}`);
+    //console.log(`Number of enemies created: ${enemies.length}`);
     enemies.forEach((enemy, index) => {
-        console.log(`Enemy ${index} position:`, enemy.position);
+        //console.log(`Enemy ${index} position:`, enemy.position);
     });
 
     manaBarElement = createManaBar();
     seedDisplayElement = createSeedDisplay(seed);
     createLifeBar();
-    createCollisionBoxToggleButton(toggleCollisionBoxes);
-    createDebugLinesToggleButton(toggleDebugLines);
     createFireflyCounter(fireflyCount);
     createSpellDisplay();
     createStairsPrompt();
@@ -264,7 +257,7 @@ function animate(composer) {
         spawnEnemy(scene, collidableObjects, navMesh).then(newEnemy => {
             if (newEnemy) {
                 enemies.push(newEnemy);
-                console.log(`Enemy spawned. Total enemies: ${enemies.length}`);
+                //console.log(`Enemy spawned. Total enemies: ${enemies.length}`);
             }
         });
         lastSpawnTime = currentTime;
@@ -375,12 +368,13 @@ function increaseMana(amount) {
     updateManaBar(manaBarElement, getMana() / getMaxMana());
 }
 
-function addFirefly() {
+export function addFirefly() {
     fireflyCount += 1;
     updateFireflyCounter(fireflyCount);
     currentSpell = getAvailableSpell(fireflyCount);
     updateSpellUI(currentSpell, fireflyCount);
     updateSpellSelectionBar(fireflyCount);
+    console.log('pattt');
 }
 
 function updateCameraRotation(event) {

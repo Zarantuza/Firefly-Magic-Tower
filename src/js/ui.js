@@ -65,54 +65,7 @@ export function updateSeedDisplay(seedDisplayElement, newSeed) {
     }
 }
 
-export function createCollisionBoxToggleButton(toggleCollisionBoxes) {
-    const button = document.createElement('button');
-    button.style.position = 'absolute';
-    button.style.top = '10px';
-    button.style.right = '10px';
-    button.style.zIndex = '1000';
-    button.style.padding = '10px';
-    button.style.backgroundColor = '#333';
-    button.style.color = '#fff';
-    button.style.border = 'none';
-    button.style.borderRadius = '5px';
-    button.style.cursor = 'pointer';
-
-    button.innerText = 'Toggle Collision Boxes';
-    button.style.pointerEvents = 'auto';
-
-    button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        toggleCollisionBoxes();
-    });
-
-    document.body.appendChild(button);
-}
-
-export function createDebugLinesToggleButton(toggleDebugLines) {
-    const button = document.createElement('button');
-    button.style.position = 'absolute';
-    button.style.top = '50px';
-    button.style.right = '10px';
-    button.style.zIndex = '1000';
-    button.style.padding = '10px';
-    button.style.backgroundColor = '#555';
-    button.style.color = '#fff';
-    button.style.border = 'none';
-    button.style.borderRadius = '5px';
-    button.style.cursor = 'pointer';
-
-    button.innerText = 'Toggle Debug Lines';
-    button.style.pointerEvents = 'auto';
-
-    button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        toggleDebugLines();
-    });
-
-    document.body.appendChild(button);
-}
-
+// ui.js
 export function createFireflyCounter(initialCount) {
     const counter = document.createElement('div');
     counter.id = 'fireflyCounter';
@@ -132,6 +85,8 @@ export function updateFireflyCounter(count) {
     const counter = document.getElementById('fireflyCounter');
     if (counter) {
         counter.innerText = `Fireflies: ${count}`;
+    } else {
+        console.warn("Firefly counter element not found");
     }
 }
 
@@ -139,10 +94,10 @@ export function createSpellDisplay() {
     const spellDisplay = document.createElement('div');
     spellDisplay.id = 'spellDisplay';
     spellDisplay.style.position = 'absolute';
-    spellDisplay.style.top = '20px';
-    spellDisplay.style.left = '20px';
+    spellDisplay.style.top = '50px';
+    spellDisplay.style.left = '10px';
     spellDisplay.style.color = '#ffffff';
-    spellDisplay.style.fontSize = '18px';
+    spellDisplay.style.fontSize = '15px';
     spellDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
     spellDisplay.style.padding = '10px';
     spellDisplay.style.borderRadius = '5px';
@@ -170,6 +125,12 @@ export function updateSpellUI(spell, fireflyCount) {
 }
 
 export function createSpellSelectionBar(spells) {
+    // Add Google Fonts link to the document head
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+
     const spellBar = document.createElement('div');
     spellBar.id = 'spellSelectionBar';
     spellBar.style.position = 'absolute';
@@ -203,13 +164,17 @@ export function createSpellSelectionBar(spells) {
 }
 
 function createSpellSlot(spellName, displayKey, color, iconPath) {
+    const slotContainer = document.createElement('div');
+    slotContainer.style.display = 'flex';
+    slotContainer.style.flexDirection = 'column';
+    slotContainer.style.alignItems = 'center';
+    slotContainer.style.margin = '0 5px';
+
     const slot = document.createElement('div');
-    slot.style.width = '70px';
-    slot.style.height = '70px';
+    slot.style.width = '80px';
+    slot.style.height = '80px';
     slot.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
-    slot.style.margin = '0 5px';
     slot.style.display = 'flex';
-    slot.style.flexDirection = 'column';
     slot.style.justifyContent = 'center';
     slot.style.alignItems = 'center';
     slot.style.borderRadius = '5px';
@@ -230,62 +195,65 @@ function createSpellSlot(spellName, displayKey, color, iconPath) {
     overlay.style.left = '0';
     overlay.style.width = '100%';
     overlay.style.height = '100%';
-    //overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
     slot.appendChild(overlay);
 
     const keyText = document.createElement('div');
     keyText.textContent = displayKey;
     keyText.style.fontSize = '12px';
     keyText.style.color = 'white';
-    keyText.style.position = 'relative';
+    keyText.style.position = 'absolute';
+    keyText.style.top = '5px';
+    keyText.style.left = '5px';
     keyText.style.zIndex = '1';
+    
+    slot.appendChild(keyText);
+    slotContainer.appendChild(slot);
 
     const nameText = document.createElement('div');
     nameText.textContent = spellName;
-    nameText.style.fontSize = '10px';
+    nameText.style.fontSize = '12px';
     nameText.style.color = 'white';
     nameText.style.textAlign = 'center';
-    nameText.style.position = 'relative';
-    nameText.style.zIndex = '1';
-    
-    slot.appendChild(keyText);
-    slot.appendChild(nameText);
+    nameText.style.marginTop = '5px';
+    nameText.style.fontFamily = "'Cinzel', serif";
+    nameText.style.textShadow = '0 0 3px black';
+    slotContainer.appendChild(nameText);
 
-    return slot;
+    return slotContainer;
 }
 
 
 
 export function updateSelectedSpell(key) {
-    console.log(`updateSelectedSpell called with key: ${key}`);
+    //console.log(`updateSelectedSpell called with key: ${key}`);
     const spellBar = document.getElementById('spellSelectionBar');
     if (!spellBar) {
-        console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
+        //console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
         return;
     }
 
-    console.log(`Number of spell slots: ${spellBar.children.length}`);
+    //console.log(`Number of spell slots: ${spellBar.children.length}`);
 
     let foundMatch = false;
     Array.from(spellBar.children).forEach((slot, index) => {
-        console.log(`Checking slot ${index}: key=${slot.dataset.key}, display=${slot.style.display}`);
+        //console.log(`Checking slot ${index}: key=${slot.dataset.key}, display=${slot.style.display}`);
         if (slot.dataset.key === key && slot.style.display !== 'none') {
-            console.log(`Match found for key ${key}. Highlighting slot ${index}`);
+            //console.log(`Match found for key ${key}. Highlighting slot ${index}`);
             highlightSelectedSpell(slot);
             foundMatch = true;
         } else {
-            console.log(`No match for key ${key}. Unhighlighting slot ${index}`);
+            //console.log(`No match for key ${key}. Unhighlighting slot ${index}`);
             unhighlightSpell(slot);
         }
     });
 
     if (!foundMatch) {
-        console.warn(`No visible slot found for key: ${key}`);
+        //console.warn(`No visible slot found for key: ${key}`);
     }
 }
 
 function highlightSelectedSpell(slot) {
-    //console.log(`Highlighting slot: ${slot.dataset.key}`);
+    ////console.log(`Highlighting slot: ${slot.dataset.key}`);
     slot.style.border = '2px solid white';
     slot.style.boxShadow = '0 0 10px white';
     slot.style.transform = 'scale(1.1)';
@@ -309,7 +277,7 @@ export function initializeSelectedSpell() {
         //console.log('Highlighting first spell slot');
         highlightSelectedSpell(spellBar.children[0]);
     } else {
-        console.warn('Spell bar not found or empty during initialization');
+        //console.warn('Spell bar not found or empty during initialization');
     }
 }
 
@@ -317,7 +285,7 @@ export function updateSpellSelectionBar(fireflyCount) {
     //console.log(`Updating spell selection bar. Firefly count: ${fireflyCount}`);
     const spellBar = document.getElementById('spellSelectionBar');
     if (!spellBar) {
-        console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
+        //console.warn('Spell selection bar not found. Make sure createSpellSelectionBar has been called.');
         return;
     }
 
@@ -332,7 +300,7 @@ export function updateSpellSelectionBar(fireflyCount) {
         const spell = spells[spellIndex];
         const isUnlocked = fireflyCount >= spell.firefliesRequired;
         slot.style.display = isUnlocked ? 'flex' : 'none';
-       //console.log(`Slot ${index} (${spell.name}): isUnlocked=${isUnlocked}, display=${slot.style.display}`);
+       console.log(`Slot ${index} (${spell.name}): isUnlocked=${isUnlocked}, display=${slot.style.display}`);
 
         if (isUnlocked && slot.classList.contains('selected-spell')) {
             //console.log(`Maintaining highlight for selected spell: ${spell.name}`);

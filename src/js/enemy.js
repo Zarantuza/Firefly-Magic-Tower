@@ -82,7 +82,7 @@ async loadModel() {
             this.mesh.position.y = 1; // Ajustez cette valeur selon la hauteur du sol
             adjustToGroundLevel(this.mesh, this.collidableObjects);
             
-            console.log(`Enemy loaded at position: ${this.mesh.position.x}, ${this.mesh.position.y}, ${this.mesh.position.z}`);
+            //console.log(`Enemy loaded at position: ${this.mesh.position.x}, ${this.mesh.position.y}, ${this.mesh.position.z}`);
             
             this.findNewTarget();
             resolve(this);
@@ -107,54 +107,67 @@ async loadModel() {
         }
     }
 
-    update(delta) {
-        if (!this.isLoaded || !this.mesh) return;
-    
-        if (this.mixer) {
-            this.mixer.update(delta);
-        }
-    
-        if (!this.path || this.currentPathIndex >= this.path.length) {
-            this.findNewTarget();
-        }
-    
-        if (this.path && this.currentPathIndex < this.path.length) {
-            const targetPosition = this.path[this.currentPathIndex];
-            const direction = new THREE.Vector3().subVectors(targetPosition, this.mesh.position).normalize();
-            
+update(delta) {
+    if (!this.isLoaded || !this.mesh) return;
+
+    // Update animations
+    if (this.mixer) {
+        this.mixer.update(delta);
+    }
+
+    // Path looping logic: Loop back to the first waypoint when reaching the last one
+    if (this.path && this.currentPathIndex >= this.path.length) {
+        this.currentPathIndex = 0; // Restart the path to make it a loop
+    }
+
+    // Check if a path exists and we're still on it
+    if (this.path && this.currentPathIndex < this.path.length) {
+        const targetPosition = this.path[this.currentPathIndex];
+        const direction = new THREE.Vector3().subVectors(targetPosition, this.mesh.position).normalize();
+
+        // Avoid walls with raycasting
+        const raycaster = new THREE.Raycaster(this.mesh.position, direction);
+        const intersects = raycaster.intersectObjects(this.collidableObjects);
+
+        if (intersects.length > 0 && intersects[0].distance < 1.5) {
+            // Obstacle detected, change direction (90-degree turn)
+            const avoidanceDirection = new THREE.Vector3(-direction.z, 0, direction.x); // 90-degree turn to avoid the wall
+            this.mesh.position.add(avoidanceDirection.multiplyScalar(ENEMY_SPEED * delta));
+        } else {
+            // Move towards the target position
             const movement = new THREE.Vector3(
                 direction.x * ENEMY_SPEED * delta,
                 0,
                 direction.z * ENEMY_SPEED * delta
             );
-            
-            const oldPosition = this.mesh.position.clone();
             this.mesh.position.add(movement);
-            
-            console.log(`Enemy ${this.type} moved from ${oldPosition.x.toFixed(2)}, ${oldPosition.z.toFixed(2)} to ${this.mesh.position.x.toFixed(2)}, ${this.mesh.position.z.toFixed(2)}`);
-            console.log(`Current target: ${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)}, Distance: ${this.mesh.position.distanceTo(targetPosition).toFixed(2)}`);
-    
-            // Faire pivoter l'ennemi vers la direction du mouvement, mais seulement sur l'axe Y
-            this.mesh.lookAt(new THREE.Vector3(
-                this.mesh.position.x + direction.x,
-                this.mesh.position.y,
-                this.mesh.position.z + direction.z
-            ));
-    
-            if (this.mesh.position.distanceTo(targetPosition) < 0.1) {
-                console.log(`Reached waypoint ${this.currentPathIndex}`);
-                this.currentPathIndex++;
-                if (this.currentPathIndex >= this.path.length) {
-                    console.log('Reached final waypoint, finding new target');
-                    this.findNewTarget();
-                }
-            }
-    
-            this.setAction('walk');
-        } else {
-            this.setAction('idle');
         }
+
+        // Smoother turning (quaternion slerp for smooth rotation)
+        const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
+            this.mesh.getWorldDirection(new THREE.Vector3()),
+            direction.clone().normalize()
+        );
+        this.mesh.quaternion.slerp(targetQuaternion, delta * 2); // Adjust the second parameter for turning speed
+
+        //console.log(`Enemy ${this.type} moved to ${this.mesh.position.x.toFixed(2)}, ${this.mesh.position.z.toFixed(2)}`);
+        //console.log(`Current target: ${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)}, Distance: ${this.mesh.position.distanceTo(targetPosition).toFixed(2)}`);
+
+        // Check if the enemy reached the current waypoint
+        if (this.mesh.position.distanceTo(targetPosition) < 0.1) {
+            //console.log(`Reached waypoint ${this.currentPathIndex}`);
+            this.currentPathIndex++;
+        }
+
+        // Set walking animation
+        this.setAction('walk');
+    } else {
+        // If no path or path is finished, set idle animation
+        this.setAction('idle');
     }
+}
+
+    
     
     // Nouvelle méthode pour ajouter le helper de direction
     addDirectionHelper(direction) {
@@ -170,13 +183,13 @@ async loadModel() {
 
     findNewTarget() {
         if (!this.navMesh || typeof this.navMesh.getRandomNode !== 'function') {
-            console.warn('NavMesh not available or getRandomNode is not a function.');
+            //console.warn('NavMesh not available or getRandomNode is not a function.');
             return;
         }
     
         const randomNode = this.navMesh.getRandomNode();
         if (!randomNode) {
-            console.warn('No valid target found in NavMesh.');
+            //console.warn('No valid target found in NavMesh.');
             return;
         }
     
@@ -186,23 +199,23 @@ async loadModel() {
         if (typeof this.navMesh.findPath === 'function') {
             this.path = this.navMesh.findPath(this.mesh.position, this.targetPosition);
             if (this.path && Array.isArray(this.path)) {
-                console.log(`New path generated with ${this.path.length} waypoints:`, this.path);
+                //console.log(`New path generated with ${this.path.length} waypoints:`, this.path);
             } else {
-                console.warn('Invalid path returned from findPath');
+                //console.warn('Invalid path returned from findPath');
                 this.path = [this.targetPosition];
             }
         } else {
-            console.warn('NavMesh findPath is not a function. Using direct path.');
+            //console.warn('NavMesh findPath is not a function. Using direct path.');
             this.path = [this.targetPosition];
         }
         this.currentPathIndex = 0;
     
-        console.log(`New target set for ${this.type}: ${this.targetPosition.x.toFixed(2)}, ${this.targetPosition.z.toFixed(2)}`);
+        //console.log(`New target set for ${this.type}: ${this.targetPosition.x.toFixed(2)}, ${this.targetPosition.z.toFixed(2)}`);
     }
 
     takeDamage(amount) {
         this.health -= amount;
-        console.log(`Enemy ${this.type} took ${amount} damage. Remaining health: ${this.health}`);
+        //console.log(`Enemy ${this.type} took ${amount} damage. Remaining health: ${this.health}`);
         if (this.health <= 0) {
             this.die();
         }
@@ -217,7 +230,7 @@ async loadModel() {
 
 export function spawnEnemy(scene, collidableObjects, navMesh) {
     return new Promise((resolve, reject) => {
-        console.log("Spawning enemy with NavMesh:", navMesh);
+        //console.log("Spawning enemy with NavMesh:", navMesh);
         if (!navMesh || !navMesh.nodes || navMesh.nodes.length === 0) {
             console.error("Invalid NavMesh provided to spawnEnemy");
             resolve(null);
@@ -226,12 +239,12 @@ export function spawnEnemy(scene, collidableObjects, navMesh) {
 
         const position = getRandomFreePosition(navMesh);
         if (!position) {
-            console.warn('Could not find a free position for enemy spawn');
+            ////console.warn('Could not find a free position for enemy spawn');
             resolve(null);
             return;
         }
 
-        console.log(`Attempting to spawn enemy at: ${position.x}, ${position.y}, ${position.z}`);
+        //console.log(`Attempting to spawn enemy at: ${position.x}, ${position.y}, ${position.z}`);
         
         const enemyTypes = Object.keys(ENEMY_TYPES);
         const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
@@ -240,7 +253,7 @@ export function spawnEnemy(scene, collidableObjects, navMesh) {
         enemy.loadModel().then(() => {
             // Adjust enemy position to ground level
             adjustEnemyToGroundLevel(enemy, collidableObjects);
-            console.log(`Successfully spawned ${randomType} enemy at: ${enemy.mesh.position.x}, ${enemy.mesh.position.y}, ${enemy.mesh.position.z}`);
+            //console.log(`Successfully spawned ${randomType} enemy at: ${enemy.mesh.position.x}, ${enemy.mesh.position.y}, ${enemy.mesh.position.z}`);
             resolve(enemy);
         }).catch((error) => {
             console.error('Error spawning enemy:', error);
@@ -251,7 +264,7 @@ export function spawnEnemy(scene, collidableObjects, navMesh) {
 
 function getRandomFreePosition(navMesh) {
     if (!navMesh || !navMesh.nodes || navMesh.nodes.length === 0) {
-        console.warn('NavMesh is not properly initialized');
+        //console.warn('NavMesh is not properly initialized');
         return null;
     }
 
@@ -259,7 +272,7 @@ function getRandomFreePosition(navMesh) {
     const availableNodes = navMesh.nodes.filter(node => !node.occupied);
 
     if (availableNodes.length === 0) {
-        console.warn('No free positions available in the NavMesh');
+        //console.warn('No free positions available in the NavMesh');
         return null;
     }
 

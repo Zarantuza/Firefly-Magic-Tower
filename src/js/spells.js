@@ -160,12 +160,12 @@ export const spells = [
     },
     {
         name: 'Poison Cloud',
-        firefliesRequired: 75,
+        firefliesRequired: 51,
         cost: 35,
         color: 0x32cd32,
         iconPath: 'img/spells/poison-cloud.jpg',
         speed: 5,
-        scale: 1,
+        scale: 0.5,
         damage: 20,
         behavior: (spell, delta, scene) => {
             spell.position.add(spell.velocity.clone().multiplyScalar(delta));
@@ -183,7 +183,7 @@ export const spells = [
                 particle.scale.setScalar(Math.random() * 0.5 + 0.5);
                 spell.parent.add(particle);
                 new TWEEN.Tween(particle.scale).to({ x: 0, y: 0, z: 0 }, 2000).start();
-                setTimeout(() => scene.remove(particle), 500);
+                setTimeout(() => scene.remove(particle), 5000);
             }
         }
     },
@@ -357,7 +357,7 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
     gameScene = scene;
 
     if (!spell) {
-        //////////console.warn('No spell available.');
+        ////////////console.warn('No spell available.');
         return null;
     }
 
@@ -402,7 +402,7 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
                         if (spellBox.intersectsBox(enemyBox)) {
                             enemy.takeDamage(spell.damage);
                             collisionOccurred = true;
-                            ////////console.log(`Spell hit ${enemy.type} enemy for ${spell.damage} damage`);
+                            //////////console.log(`Spell hit ${enemy.type} enemy for ${spell.damage} damage`);
                         }
                     }
                 });
