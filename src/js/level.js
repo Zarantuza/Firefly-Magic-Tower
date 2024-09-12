@@ -83,6 +83,7 @@ const config = {
     floatingObjectHeight: 0.5,
 };
 
+
 let gridRows = config.gridRows;
 let gridCols = config.gridCols;
 const cellSize = config.cellSize;
@@ -119,21 +120,31 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     addCastleLights(scene);
     console.log("Items placed.");
 
+    
+
     try {
+        
         // Create NavMesh
         navMesh = new NavMesh(maze);
+        console.log("NavMesh created:", navMesh);
+        visualizeNavMesh(scene, navMesh);
+        console.log("NavMesh created:", navMesh);
+        
+        
 
         // Spawn new enemies
         const MAX_ENEMIES = 5;
         const enemyPromises = [];
         for (let i = 0; i < MAX_ENEMIES; i++) {
             enemyPromises.push(spawnEnemy(scene, collidableObjects, navMesh));
+            console.log (`Spawning enemy ${i+1} of ${MAX_ENEMIES}`);
         }
 
         const newEnemies = await Promise.all(enemyPromises);
         newEnemies.forEach(enemy => {
             if (enemy) {
                 enemies.push(enemy);
+                console.log("Enemy added to scene:", enemy);
             }
         });
 
@@ -147,7 +158,7 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     });
 
     console.log("Level creation completed");
-    return stairsPosition;
+    return { stairsPosition, navMesh };
 }
 
 export function placePlayer(character, characterBoundingBox) {
@@ -311,6 +322,20 @@ function generateMaze(rows, cols, seed) {
             currentCell = stack.pop();
         }
     }
+}
+
+function visualizeNavMesh(scene, navMesh) {
+    const geometry = new THREE.BufferGeometry();
+    const positions = [];
+
+    navMesh.nodes.forEach(node => {
+        positions.push(node.position.x, node.position.y, node.position.z);
+    });
+
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({ color: 0xff0000, size: 0.5 });
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
 }
 
 function createMazeGeometry(scene, collidableObjects) {

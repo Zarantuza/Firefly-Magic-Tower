@@ -357,7 +357,7 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
     gameScene = scene;
 
     if (!spell) {
-        console.warn('No spell available.');
+        //////////console.warn('No spell available.');
         return null;
     }
 
@@ -402,7 +402,7 @@ export function shootSpell(character, scene, collidableObjects, camera, vertical
                         if (spellBox.intersectsBox(enemyBox)) {
                             enemy.takeDamage(spell.damage);
                             collisionOccurred = true;
-                            console.log(`Spell hit ${enemy.type} enemy for ${spell.damage} damage`);
+                            ////////console.log(`Spell hit ${enemy.type} enemy for ${spell.damage} damage`);
                         }
                     }
                 });
@@ -447,6 +447,8 @@ function checkCollisions(direction, collidableObjects, spell) {
     for (let i = 0; i < collidableObjects.length; i++) {
         const obj = collidableObjects[i];
         if (!obj || !obj.geometry) continue;
+
+        if (obj.userData && obj.userData.isCollectible) continue;
 
         const objectBox = new THREE.Box3().setFromObject(obj);
         if (predictedBox.intersectsBox(objectBox)) {

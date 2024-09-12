@@ -204,8 +204,8 @@ export function createSpellSelectionBar(spells) {
 
 function createSpellSlot(spellName, displayKey, color, iconPath) {
     const slot = document.createElement('div');
-    slot.style.width = '100px';
-    slot.style.height = '100px';
+    slot.style.width = '70px';
+    slot.style.height = '70px';
     slot.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
     slot.style.margin = '0 5px';
     slot.style.display = 'flex';

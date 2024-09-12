@@ -56,12 +56,10 @@ let shootSourceHeight = 1.0;
 let minCameraPitch = -Math.PI / 4;
 let maxCameraPitch = Math.PI / 4;
 
-function init() {
+async function init() {
     stats = new Stats();
     stats.showPanel(0);
     document.body.appendChild(stats.dom);
-
-    
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
@@ -97,43 +95,61 @@ function init() {
     clock = new THREE.Clock();
 
     const loader = new GLTFLoader();
-    loader.load('/glb/wizardAnimated-v3.glb', (gltf) => {
-        character = gltf.scene;
+    await new Promise((resolve, reject) => {
+        loader.load('/glb/wizardAnimated-v3.glb', (gltf) => {
+            character = gltf.scene;
+            character.position.set(0, 0, 0);
+            character.position.y += 1;
 
-        scene.add(character);
+            scene.add(character);
 
-        mixer = new THREE.AnimationMixer(character);
+            mixer = new THREE.AnimationMixer(character);
 
-        gltf.animations.forEach((clip) => {
-            const action = mixer.clipAction(clip);
-            animationsMap.set(clip.name.toLowerCase(), action);
-        });
+            gltf.animations.forEach((clip) => {
+                const action = mixer.clipAction(clip);
+                animationsMap.set(clip.name.toLowerCase(), action);
+            });
 
-        setAction('idle');
+            setAction('idle');
 
-        const boundingBoxGeometry = new THREE.BoxGeometry(
-            wizardCollisionBoxSize.x,
-            wizardCollisionBoxSize.y,
-            wizardCollisionBoxSize.z
-        );
-        const boundingBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, visible: false });
-        characterBoundingBox = new THREE.Mesh(boundingBoxGeometry, boundingBoxMaterial);
+            const boundingBoxGeometry = new THREE.BoxGeometry(
+                wizardCollisionBoxSize.x,
+                wizardCollisionBoxSize.y,
+                wizardCollisionBoxSize.z
+            );
+            const boundingBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, visible: false });
+            characterBoundingBox = new THREE.Mesh(boundingBoxGeometry, boundingBoxMaterial);
 
-        characterBoundingBox.position.copy(wizardCollisionBoxOffset);
-        character.add(characterBoundingBox);
+            characterBoundingBox.position.copy(wizardCollisionBoxOffset);
+            character.add(characterBoundingBox);
 
-        debugHelpers.push(characterBoundingBox);
+            debugHelpers.push(characterBoundingBox);
 
-        createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies);
-        console.log(`Number of enemies created: ${enemies.length}`);
-        enemies.forEach((enemy, index) => {
-            console.log(`Enemy ${index} position:`, enemy.position);
-        });
+            resolve();
+        }, undefined, reject);
     });
 
-    for (let i = 0; i < 5; i++) {
-        enemies.push(spawnEnemy(scene, collidableObjects));
+    const { stairsPosition, navMesh } = await createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies);
+    
+    console.log("NavMesh received:", navMesh);
+
+    // Spawn enemies using the navMesh
+    const MAX_ENEMIES = 5;
+    for (let i = 0; i < MAX_ENEMIES; i++) {
+        console.log(`Spawning enemy ${i + 1} of ${MAX_ENEMIES}`);
+        const enemy = await spawnEnemy(scene, collidableObjects, navMesh);
+        if (enemy) {
+            enemies.push(enemy);
+            console.log(`Enemy ${i + 1} spawned successfully`);
+        } else {
+            console.log(`Failed to spawn enemy ${i + 1}`);
+        }
     }
+
+    console.log(`Number of enemies created: ${enemies.length}`);
+    enemies.forEach((enemy, index) => {
+        console.log(`Enemy ${index} position:`, enemy.position);
+    });
 
     manaBarElement = createManaBar();
     seedDisplayElement = createSeedDisplay(seed);

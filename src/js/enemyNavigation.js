@@ -1,23 +1,25 @@
 // enemyNavigation.js
 
 import * as THREE from 'three';
+import { config } from './level.js';
 
-const CELL_SIZE = 10;
-const WALL_OFFSET = 1; // Security offset from walls
+
 
 export class NavMesh {
     constructor(maze) {
         this.maze = maze;
-        this.grid = this.createNavigationGrid();
-        this.nodes = this.createNodes();
+    this.grid = this.createNavigationGrid();
+    this.nodes = this.createNodes();
+    console.log(`NavMesh initialized with ${this.nodes.length} nodes`);
     }
 
     createNodes() {
         const nodes = [];
         for (let row = 0; row < this.maze.length; row++) {
             for (let col = 0; col < this.maze[row].length; col++) {
-                if (!this.maze[row][col].north && !this.maze[row][col].south &&
-                    !this.maze[row][col].east && !this.maze[row][col].west) {
+                // Consider a cell walkable if it has at least one open side
+                if (!this.maze[row][col].north || !this.maze[row][col].south ||
+                    !this.maze[row][col].east || !this.maze[row][col].west) {
                     nodes.push({
                         position: new THREE.Vector3(
                             col * config.cellSize + config.cellSize / 2,
@@ -30,12 +32,14 @@ export class NavMesh {
                 }
             }
         }
+        console.log(`Created ${nodes.length} nodes`);
         return nodes;
     }
 
     getRandomNode() {
-        if (this.nodes.length === 0) {
-            throw new Error("No walkable nodes in the NavMesh");
+        if (!this.nodes || this.nodes.length === 0) {
+            console.warn('No nodes available in NavMesh');
+            return null;
         }
         return this.nodes[Math.floor(Math.random() * this.nodes.length)];
     }
@@ -47,8 +51,8 @@ export class NavMesh {
             for (let col = 0; col < this.maze[row].length; col++) {
                 grid[row][col] = {
                     walkable: true,
-                    x: col * CELL_SIZE + CELL_SIZE / 2,
-                    z: row * CELL_SIZE + CELL_SIZE / 2
+                    x: col * config.cellSize + config.cellSize / 2,
+                    z: row * config.cellSize + config.cellSize / 2
                 };
 
                 // Mark cells with walls as non-walkable
@@ -61,25 +65,7 @@ export class NavMesh {
         return grid;
     }
 
-    createNodes() {
-        const nodes = [];
-        for (let row = 0; row < this.grid.length; row++) {
-            for (let col = 0; col < this.grid[row].length; col++) {
-                if (this.grid[row][col].walkable) {
-                    nodes.push({
-                        position: new THREE.Vector3(
-                            this.grid[row][col].x,
-                            1,  // Adjust height as needed
-                            this.grid[row][col].z
-                        ),
-                        row: row,
-                        col: col
-                    });
-                }
-            }
-        }
-        return nodes;
-    }
+
 
     getRandomNode() {
         if (this.nodes.length === 0) {
@@ -178,16 +164,16 @@ export class NavMesh {
 
     worldToGrid(position) {
         return {
-            row: Math.floor(position.z / CELL_SIZE),
-            col: Math.floor(position.x / CELL_SIZE)
+            row: Math.floor(position.z / config.cellSize),
+            col: Math.floor(position.x / config.cellSize)
         };
     }
 
     gridToWorld(cell) {
         return new THREE.Vector3(
-            cell.col * CELL_SIZE + CELL_SIZE / 2,
+            cell.col * config.cellSize + config.cellSize / 2,
             0,
-            cell.row * CELL_SIZE + CELL_SIZE / 2
+            cell.row * config.cellSize + config.cellSize / 2
         );
     }
 
