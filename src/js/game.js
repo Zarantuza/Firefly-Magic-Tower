@@ -5,15 +5,42 @@ import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPix
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { createLevel, checkCollisionsForCollectibles } from './level.js';
-import { handlePlayerMovement, initiateJump, initiatePunch, castSpell, updateCameraPosition, getMana, setMana, getMaxMana } from './player.js';
+import {
+    handlePlayerMovement,
+    initiateJump,
+    initiatePunch,
+    castSpell,
+    updateCameraPosition,
+    getMana,
+    setMana,
+    getMaxMana,
+    player,
+    increaseMana,
+    addFirefly,
+    getFireflyCount,
+    setFireflyCount
+} from './player.js';
 import { onWindowResize, onMouseMove, onMouseWheel } from './utils.js';
 import { checkCollisions } from './collision.js';
-import { createManaBar, updateManaBar, createLifeBar, createSeedDisplay, updateSeedDisplay, createFireflyCounter, updateFireflyCounter, createSpellDisplay, updateSpellUI, createSpellSelectionBar, updateSelectedSpell, updateSpellSelectionBar } from './ui.js';
+import {
+    createManaBar,
+    updateManaBar,
+    createLifeBar,
+    createSeedDisplay,
+    updateSeedDisplay,
+    createFireflyCounter,
+    updateFireflyCounter,
+    createSpellDisplay,
+    updateSpellUI,
+    createSpellSelectionBar,
+    updateSelectedSpell,
+    updateSpellSelectionBar,
+    initializeSelectedSpell
+} from './ui.js';
 import { getAvailableSpell, spells } from './spells.js';
 import Stats from 'stats.js';
 import { spawnEnemy } from './enemy.js';
 import { NavMesh } from './enemyNavigation.js';
-import { initializeSelectedSpell } from './ui.js';
 
 let navMesh;
 let scene, camera, renderer, mixer, clock;
@@ -38,7 +65,6 @@ let collisionBoxVisible = false;
 let debugLinesVisible = true;
 let currentLevel = 1;
 let nearStairs = false;
-let fireflyCount = 50;
 let currentSpell = null;
 let stats;
 let stairsPromptVisible = false;
@@ -56,25 +82,36 @@ let shootSourceHeight = 1.0;
 let minCameraPitch = -Math.PI / 4;
 let maxCameraPitch = Math.PI / 4;
 
-async function init() {
-    stats = new Stats();
-    stats.showPanel(0);
-    document.body.appendChild(stats.dom);
+let isLoading = false;
+let controlsEnabled = false;
 
+function init() {
+    // Configuration de l'écouteur pour le bouton "Jouer"
+    const playButton = document.getElementById('play-button');
+    if (playButton) {
+        playButton.addEventListener('click', () => {
+            showMainMenu(false);
+            startGame();
+        });
+    }
+}
+
+function startGame() {
+    isLoading = true;
+    showLoadingScreen(true);
+
+    // Initialisation de la scène, caméra, rendu, etc.
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 3, -cameraDistance);
 
-    
-
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));   
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Optional: for softer shadows
+
     document.body.appendChild(renderer.domElement);
 
     const composer = new EffectComposer(renderer);
@@ -84,13 +121,47 @@ async function init() {
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
 
+    const light1 = new THREE.DirectionalLight(0xfff5e1, 0.8);
+    light1.position.set(10, 20, 10);
+    scene.add(light1);
+
+    const light2 = new THREE.DirectionalLight(0xe1f0ff, 0.8);
+    light2.position.set(-10, 20, -10);
+    scene.add(light2);
+
     const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
     scene.add(ambientLight);
 
     clock = new THREE.Clock();
 
-    const loader = new GLTFLoader();
-    await new Promise((resolve, reject) => {
+    // Démarrer le chargement des assets et du niveau
+    loadLevel().then(() => {
+        isLoading = false;
+        controlsEnabled = true;
+        showLoadingScreen(false);
+        // Démarrer la boucle d'animation
+        animate(composer);
+    }).catch((error) => {
+        console.error('Échec du chargement du jeu :', error);
+    });
+
+    manaBarElement = createManaBar();
+    seedDisplayElement = createSeedDisplay(seed);
+    createLifeBar();
+    createFireflyCounter(getFireflyCount());
+    createSpellDisplay();
+    createStairsPrompt();
+    const spellBar = createSpellSelectionBar(spells);
+    updateSpellSelectionBar(getFireflyCount());
+    initializeSelectedSpell();
+
+    window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
+}
+
+function loadLevel() {
+    return new Promise((resolve, reject) => {
+        // Charger les assets, créer le niveau, etc.
+        const loader = new GLTFLoader();
         loader.load('/glb/wizardAnimated-v3.glb', (gltf) => {
             character = gltf.scene;
             character.position.set(0, 0, 0);
@@ -120,111 +191,60 @@ async function init() {
 
             debugHelpers.push(characterBoundingBox);
 
-            resolve();
-        }, undefined, reject);
+            createLevel(
+                scene,
+                collidableObjects,
+                collisionHelpers,
+                wizardCollisionBoxSize,
+                wizardCollisionBoxOffset,
+                clock,
+                seed,
+                character,
+                characterBoundingBox,
+                debugHelpers,
+                enemies
+            ).then(() => {
+                console.log(`Nombre d'ennemis créés : ${enemies.length}`);
+                enemies.forEach((enemy, index) => {
+                    console.log(`Position de l'ennemi ${index} :`, enemy.position);
+                });
+                resolve();
+            }).catch((error) => {
+                console.error('Erreur lors du chargement du niveau :', error);
+                reject(error);
+            });
+        }, undefined, (error) => {
+            console.error('Une erreur s\'est produite lors du chargement du modèle du personnage :', error);
+            reject(error);
+        });
     });
-
-    const { stairsPosition, navMesh } = await createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies);
-    
-    //console.log("NavMesh received:", navMesh);
-
-    // Spawn enemies using the navMesh
-    const MAX_ENEMIES = 5;
-    for (let i = 0; i < MAX_ENEMIES; i++) {
-        //console.log(`Spawning enemy ${i + 1} of ${MAX_ENEMIES}`);
-        const enemy = await spawnEnemy(scene, collidableObjects, navMesh);
-        if (enemy) {
-            enemies.push(enemy);
-            //console.log(`Enemy ${i + 1} spawned successfully`);
-        } else {
-            //console.log(`Failed to spawn enemy ${i + 1}`);
-        }
-    }
-
-    //console.log(`Number of enemies created: ${enemies.length}`);
-    enemies.forEach((enemy, index) => {
-        //console.log(`Enemy ${index} position:`, enemy.position);
-    });
-
-    manaBarElement = createManaBar();
-    seedDisplayElement = createSeedDisplay(seed);
-    createLifeBar();
-    createFireflyCounter(fireflyCount);
-    createSpellDisplay();
-    createStairsPrompt();
-    const spellBar = createSpellSelectionBar(spells);
-    updateSpellSelectionBar(fireflyCount);
-    initializeSelectedSpell();
-
-    window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    document.addEventListener('keyup', (event) => {
-        keysPressed[event.key.toLowerCase()] = false;
-        if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !isJumping) {
-            setAction('idle');
-        }
-    });
-
-    document.addEventListener('mousemove', (event) => {
-        if (isFPSMode) {
-            updateCameraRotation(event);
-        } else {
-            onMouseMove(character, cameraPitch, cameraDistance, (char, pitch, distance) => {
-                cameraPitch = pitch;
-                updateCameraPosition(char, pitch, distance, collidableObjects, camera);
-            })(event);
-        }
-    });
-
-    document.addEventListener('wheel', (event) => {
-        cameraDistance += event.deltaY * 0.01;
-        cameraDistance = THREE.MathUtils.clamp(cameraDistance, minCameraDistance, maxCameraDistance);
-        updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
-    });
-
-    document.addEventListener('mousedown', (event) => {
-        if (event.button === 0) {
-            castSelectedSpell();
-        } else if (event.button === 2) {
-            toggleFPSMode(true);
-        }
-    });
-
-    document.addEventListener('mouseup', (event) => {
-        if (event.button === 2) {
-            toggleFPSMode(false);
-        }
-    });
-
-    document.addEventListener('click', () => {
-        renderer.domElement.requestPointerLock();
-    });
-
-    document.addEventListener('pointerlockchange', () => {
-        if (document.pointerLockElement === renderer.domElement) {
-            document.addEventListener('mousemove', onMouseMove);
-        } else {
-            document.removeEventListener('mousemove', onMouseMove);
-        }
-    });
-
-    animate(composer);
 }
 
-let lastSpawnTime = 0;
-const SPAWN_DELAY = 5000; // 5 seconds delay between spawn attempts
-
 function animate(composer) {
-    stats.begin();
+    if (!controlsEnabled) return; // Arrête l'animation si les contrôles ne sont pas activés
 
-    const currentTime = Date.now();
     const delta = clock.getDelta();
 
     if (mixer) mixer.update(delta);
     if (character && characterBoundingBox) {
-        handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, (mana) => updateManaBar(manaBarElement, mana), animationsMap);
+        handlePlayerMovement(
+            character,
+            characterBoundingBox,
+            keysPressed,
+            delta,
+            mixer,
+            setAction,
+            checkCollisions,
+            collidableObjects,
+            cameraPitch,
+            cameraDistance,
+            updateCameraPosition,
+            camera,
+            isJumping,
+            setIsJumping,
+            updateManaBar,
+            animationsMap
+        );
     }
 
     spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
@@ -233,12 +253,12 @@ function animate(composer) {
     checkCollisionsForCollectibles(character, collidableObjects);
 
     updateManaBar(manaBarElement, getMana() / getMaxMana());
-    currentSpell = getAvailableSpell(fireflyCount);
+    currentSpell = getAvailableSpell(getFireflyCount());
     const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
-    updateSpellUI(selectedSpell, fireflyCount);
-    updateSpellSelectionBar(fireflyCount);
+    updateSpellUI(selectedSpell, getFireflyCount());
+    updateSpellSelectionBar(getFireflyCount());
 
-    // Update existing enemies
+    // Mise à jour des ennemis existants
     enemies = enemies.filter(enemy => {
         if (enemy.health > 0) {
             enemy.update(delta);
@@ -251,26 +271,13 @@ function animate(composer) {
         }
     });
 
-    // Spawn new enemies if needed, but only up to the maximum and with a delay
-    const MAX_ENEMIES = 5;
-    if (enemies.length < MAX_ENEMIES && currentTime - lastSpawnTime > SPAWN_DELAY) {
-        spawnEnemy(scene, collidableObjects, navMesh).then(newEnemy => {
-            if (newEnemy) {
-                enemies.push(newEnemy);
-                //console.log(`Enemy spawned. Total enemies: ${enemies.length}`);
-            }
-        });
-        lastSpawnTime = currentTime;
-    }
-
     composer.render();
 
-    stats.end();
     requestAnimationFrame(() => animate(composer));
 }
 
-enemies.forEach(enemy => enemy.update(delta));
 function handleKeyDown(event) {
+    if (!controlsEnabled) return;
     keysPressed[event.key.toLowerCase()] = true;
     if (event.key.toLowerCase() === ' ') {
         initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed);
@@ -278,52 +285,96 @@ function handleKeyDown(event) {
     if (event.key.toLowerCase() === 'enter' && nearStairs) {
         loadNextLevel();
     }
-    
+
     const key = event.key.toLowerCase();
-    const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à', ')','='];
+    const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à', ')', '='];
     const index = spellKeys.indexOf(key);
 
     if (index !== -1) {
-        if (index === 0 || (spells[index - 1] && fireflyCount >= spells[index - 1].firefliesRequired)) {
+        if (index === 0 || (spells[index - 1] && getFireflyCount() >= spells[index - 1].firefliesRequired)) {
             selectedSpellIndex = index;
-            updateSelectedSpell(key);  // Changé de selectedSpellIndex à key
-        
-            // Update spell UI immediately when a new spell is selected
+            updateSelectedSpell(key);
+
+            // Mettre à jour l'UI du sort immédiatement lorsque qu'un nouveau sort est sélectionné
             const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
-            updateSpellUI(selectedSpell, fireflyCount);
+            updateSpellUI(selectedSpell, getFireflyCount());
         }
     }
 }
 
-function castSelectedSpell() {
-    if (selectedSpellIndex === 0) {
-        // Melee attack
-        initiatePunch(character, mixer, animationsMap, setAction, isJumping);
-    } else {
-        const spell = spells[selectedSpellIndex - 1];
-        if (spell && fireflyCount >= spell.firefliesRequired) {
-            const spellAnimation = castSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, fireflyCount, spell, enemies);
-            if (spellAnimation) {
-                spellAnimations.push(spellAnimation);
-            }
-        } else {
-            console.warn('Not enough fireflies to cast this spell');
-        }
+document.addEventListener('keydown', handleKeyDown);
+
+document.addEventListener('keyup', (event) => {
+    if (!controlsEnabled) return;
+    keysPressed[event.key.toLowerCase()] = false;
+    if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !isJumping) {
+        setAction('idle');
     }
-}
+});
+
+document.addEventListener('mousemove', (event) => {
+    if (!controlsEnabled) return;
+    if (isFPSMode) {
+        updateCameraRotation(event);
+    } else {
+        onMouseMove(character, cameraPitch, cameraDistance, (char, pitch, distance) => {
+            cameraPitch = pitch;
+            updateCameraPosition(char, pitch, distance, collidableObjects, camera);
+        })(event);
+    }
+});
+
+document.addEventListener('wheel', (event) => {
+    if (!controlsEnabled) return;
+    cameraDistance += event.deltaY * 0.01;
+    cameraDistance = THREE.MathUtils.clamp(cameraDistance, minCameraDistance, maxCameraDistance);
+    updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
+});
+
+document.addEventListener('mousedown', (event) => {
+    if (!controlsEnabled) return;
+    if (event.button === 0) {
+        castSelectedSpell();
+    } else if (event.button === 2) {
+        toggleFPSMode(true);
+    }
+});
+
+document.addEventListener('mouseup', (event) => {
+    if (!controlsEnabled) return;
+    if (event.button === 2) {
+        toggleFPSMode(false);
+    }
+});
+
+document.addEventListener('click', () => {
+    if (!controlsEnabled) return;
+    renderer.domElement.requestPointerLock();
+});
+
+document.addEventListener('pointerlockchange', () => {
+    if (!controlsEnabled) return;
+    if (document.pointerLockElement === renderer.domElement) {
+        document.addEventListener('mousemove', onMouseMove);
+    } else {
+        document.removeEventListener('mousemove', onMouseMove);
+    }
+});
 
 function checkStairwayProximity() {
     if (!stairsPosition || !character) return;
 
     const distanceToStairs = character.position.distanceTo(stairsPosition);
     if (distanceToStairs < stairwayTriggerDistance) {
-        nearStairs = true;
+        nearStairs = true; // Add this line
         showStairsPrompt(true);
     } else {
         nearStairs = false;
         showStairsPrompt(false);
     }
 }
+
+
 
 function loadNextLevel() {
     currentLevel += 1;
@@ -335,15 +386,26 @@ function loadNextLevel() {
         }
     });
     enemies = [];
-    createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly,enemies);
-    
-    for (let i = 0; i < 5; i++) {
-        enemies.push(spawnEnemy(scene, collidableObjects));
-    }   
-    
+    createLevel(
+        scene,
+        collidableObjects,
+        collisionHelpers,
+        wizardCollisionBoxSize,
+        wizardCollisionBoxOffset,
+        clock,
+        seed,
+        character,
+        characterBoundingBox,
+        debugHelpers,
+        enemies,
+    );
+
     nearStairs = false;
     showStairsPrompt(false);
 }
+
+document.addEventListener('loadNextLevel', loadNextLevel);
+
 
 function setAction(actionName) {
     if (currentAction === actionName) return;
@@ -363,18 +425,25 @@ function setIsJumping(state) {
     isJumping = state;
 }
 
-function increaseMana(amount) {
-    setMana(Math.min(getMana() + amount, getMaxMana()));
-    updateManaBar(manaBarElement, getMana() / getMaxMana());
-}
-
-export function addFirefly() {
-    fireflyCount += 1;
-    updateFireflyCounter(fireflyCount);
-    currentSpell = getAvailableSpell(fireflyCount);
-    updateSpellUI(currentSpell, fireflyCount);
-    updateSpellSelectionBar(fireflyCount);
-    console.log('pattt');
+function castSelectedSpell() {
+    const spell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
+    const spellAnimation = castSpell(
+        character,
+        scene,
+        collidableObjects,
+        camera,
+        verticalCorrection,
+        shootSourceHeight,
+        debugHelpers,
+        getFireflyCount(),
+        spell,
+        enemies
+    );
+    if (spellAnimation) {
+        spellAnimations.push(spellAnimation);
+    } else {
+        initiatePunch(character, mixer, animationsMap, setAction, isJumping);
+    }
 }
 
 function updateCameraRotation(event) {
@@ -431,7 +500,7 @@ function createStairsPrompt() {
     stairsPrompt.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     stairsPrompt.style.borderRadius = '5px';
     stairsPrompt.style.display = 'none';
-    stairsPrompt.innerText = 'Press Enter to go up';
+    stairsPrompt.innerText = 'Appuyez sur Entrée pour monter';
     document.body.appendChild(stairsPrompt);
 }
 
@@ -443,6 +512,21 @@ function showStairsPrompt(visible) {
     stairsPrompt.style.display = visible ? 'block' : 'none';
 }
 
-init();
+function showMainMenu(show) {
+    const mainMenu = document.getElementById('main-menu');
+    if (mainMenu) {
+        mainMenu.style.display = show ? 'flex' : 'none';
+    }
+}
 
-export { showStairsPrompt, loadNextLevel };
+function showLoadingScreen(show) {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+        loadingScreen.style.display = show ? 'flex' : 'none';
+    }
+}
+
+// Démarrer l'initialisation lorsque le DOM est chargé
+window.addEventListener('DOMContentLoaded', () => {
+    init();
+});

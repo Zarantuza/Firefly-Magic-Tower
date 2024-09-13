@@ -160,7 +160,7 @@ export const spells = [
     },
     {
         name: 'Poison Cloud',
-        firefliesRequired: 51,
+        firefliesRequired: 75,
         cost: 35,
         color: 0x32cd32,
         iconPath: 'img/spells/poison-cloud.jpg',

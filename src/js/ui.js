@@ -300,7 +300,7 @@ export function updateSpellSelectionBar(fireflyCount) {
         const spell = spells[spellIndex];
         const isUnlocked = fireflyCount >= spell.firefliesRequired;
         slot.style.display = isUnlocked ? 'flex' : 'none';
-       console.log(`Slot ${index} (${spell.name}): isUnlocked=${isUnlocked}, display=${slot.style.display}`);
+       //console.log(`Slot ${index} (${spell.name}): isUnlocked=${isUnlocked}, display=${slot.style.display}`);
 
         if (isUnlocked && slot.classList.contains('selected-spell')) {
             //console.log(`Maintaining highlight for selected spell: ${spell.name}`);

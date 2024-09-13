@@ -2,11 +2,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { fadeToBlack, createRNG } from './utils.js';
-import { loadNextLevel } from './game.js';
 import { NavMesh } from './enemyNavigation.js';
 import { spawnEnemy } from './enemy.js';
-import { player } from './player.js';
-import { placeItems } from './items.js';  // Import the new placeItems function
+import { player, increaseMana, addFirefly } from './player.js';  // Importer directement depuis player.js
+import { placeItems } from './items.js';  // Importer la fonction placeItems
 
 // Configuration parameters
 const config = {
@@ -90,7 +89,6 @@ const config = {
     floatingObjectHeight: 0.5,
 };
 
-
 let gridRows = config.gridRows;
 let gridCols = config.gridCols;
 const cellSize = config.cellSize;
@@ -100,9 +98,19 @@ let occupiedPositions = new Set();
 let maze = [];
 let stairsPosition = { x: 0, z: 0 };
 
-export async function createLevel(scene, collidableObjects, collisionHelpers, wizardCollisionBoxSize, wizardCollisionBoxOffset, clock, seed, character, characterBoundingBox, debugHelpers, increaseMana, addFirefly, enemies) {
-    //console.log("Starting to create new level");
-
+export async function createLevel(
+    scene,
+    collidableObjects,
+    collisionHelpers,
+    wizardCollisionBoxSize,
+    wizardCollisionBoxOffset,
+    clock,
+    seed,
+    character,
+    characterBoundingBox,
+    debugHelpers,
+    enemies
+) {
     // Clear existing objects and enemies
     collidableObjects.forEach(obj => disposeObject(obj, scene));
     collidableObjects.length = 0;
@@ -121,51 +129,36 @@ export async function createLevel(scene, collidableObjects, collisionHelpers, wi
     createMazeGeometry(scene, collidableObjects);
     stairsPosition = placeStairway(scene, collidableObjects, character);
     createRoof(scene, collidableObjects);
-    
-    //console.log("About to place items...");
-    await placeItems(scene, collidableObjects, { addFirefly, collectFirefly: player.collectFirefly }, config, getRandomPosition);
+
+    await placeItems(scene, collidableObjects, player, config, getRandomPosition);
 
     addCastleLights(scene);
-    //console.log("Items placed.");
-
-    
 
     try {
-        
         // Create NavMesh
         navMesh = new NavMesh(maze);
-        //console.log("NavMesh created:", navMesh);
         visualizeNavMesh(scene, navMesh);
-        //console.log("NavMesh created:", navMesh);
-        
-        
 
         // Spawn new enemies
         const MAX_ENEMIES = 5;
         const enemyPromises = [];
         for (let i = 0; i < MAX_ENEMIES; i++) {
             enemyPromises.push(spawnEnemy(scene, collidableObjects, navMesh));
-            //console.log (`Spawning enemy ${i+1} of ${MAX_ENEMIES}`);
         }
 
         const newEnemies = await Promise.all(enemyPromises);
         newEnemies.forEach(enemy => {
             if (enemy) {
                 enemies.push(enemy);
-                //console.log("Enemy added to scene:", enemy);
             }
         });
-
-        //console.log(`Number of enemies created: ${enemies.length}`);
     } catch (error) {
         console.error('Error creating NavMesh or spawning enemies:', error);
     }
     placePlayer(character, characterBoundingBox);
 
-    fadeToBlack(scene, clock, () => {
-    });
+    fadeToBlack(scene, clock, () => { });
 
-    //console.log("Level creation completed");
     return { stairsPosition, navMesh };
 }
 
@@ -177,17 +170,17 @@ export function placePlayer(character, characterBoundingBox) {
 
     // Place the player at the center of the first cell
     const spawnPosition = {
-        x: config.cellSize/2 ,
+        x: config.cellSize / 2,
         y: 1.05,  // Slightly above the floor
-        z: config.cellSize/2 
+        z: config.cellSize / 2
     };
-    
+
     character.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
-    
+
     // Determine the initial orientation based on the open paths
     const firstCell = maze[0][0];
     let rotation = 0;
-    
+
     if (!firstCell.east) {
         rotation = 0; // Face east
     } else if (!firstCell.south) {
@@ -197,12 +190,10 @@ export function placePlayer(character, characterBoundingBox) {
     } else if (!firstCell.north) {
         rotation = -Math.PI / 2; // Face north
     }
-    
+
     character.rotation.y = rotation;
-    
+
     characterBoundingBox.updateMatrixWorld();
-    
-    //console.log(`Player spawned at: (${spawnPosition.x}, ${spawnPosition.y}, ${spawnPosition.z}) with rotation: ${rotation}`);
 }
 
 function getRandomFreePosition() {
@@ -210,9 +201,9 @@ function getRandomFreePosition() {
 
     for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
-            const position = { 
-                x: col * cellSize + cellSize / 2, 
-                z: row * cellSize + cellSize / 2 
+            const position = {
+                x: col * cellSize + cellSize / 2,
+                z: row * cellSize + cellSize / 2
             };
             if (!isPositionInWall(position) && !isPositionOccupied(position.x, position.z)) {
                 freePositions.push(position);
@@ -375,7 +366,7 @@ function createMazeGeometry(scene, collidableObjects) {
     const floorTexture = textureLoader.load(config.floorTexturePath);
     const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
     const floorDisplacementMap = textureLoader.load(config.floorDisplacementMapPath);
-    
+
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
@@ -534,6 +525,7 @@ function createWall(scene, x, y, z, width, height, depth, material, collidableOb
     scene.add(wall);
     collidableObjects.push(wall);
 }
+
 function placeStairway(scene, collidableObjects, character) {
     let randomRow, randomCol, x, z;
     do {
@@ -541,14 +533,17 @@ function placeStairway(scene, collidableObjects, character) {
         randomCol = THREE.MathUtils.randInt(0, config.gridCols - 1);
         x = randomCol * config.cellSize + config.cellSize / 2;
         z = randomRow * config.cellSize + config.cellSize / 2;
-    } while (Math.abs(character.position.x - x) < config.gridCols * config.cellSize / 2 && Math.abs(character.position.z - z) < config.gridRows * config.cellSize / 2);
+    } while (
+        Math.abs(character.position.x - x) < (config.gridCols * config.cellSize) / 2 &&
+        Math.abs(character.position.z - z) < (config.gridRows * config.cellSize) / 2
+    );
 
     stairsPosition.x = x;
     stairsPosition.z = z;
 
     const columnGeometry = new THREE.CylinderGeometry(1.5, 1.5, 10, 32);
     const textureLoader = new THREE.TextureLoader();
-    
+
     // Column textures
     const columnTexture = textureLoader.load(config.columnTexturePath);
     const columnNormalMap = textureLoader.load(config.columnNormalMapPath);
@@ -615,6 +610,7 @@ function placeStairway(scene, collidableObjects, character) {
         }
     }
 
+    // Ajout du StairwayCollisionBox pour détecter la proximité des escaliers
     const stairwayBoxGeometry = new THREE.BoxGeometry(config.cellSize, 5, config.cellSize);
     const stairwayBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, visible: false });
     const stairwayCollisionBox = new THREE.Mesh(stairwayBoxGeometry, stairwayBoxMaterial);
@@ -626,9 +622,12 @@ function placeStairway(scene, collidableObjects, character) {
         isCollectible: true,
         isIn: false,
         collect: function () {
+            console.log('Le joueur est à proximité de l\'escalier');
             if (!stairwayCollisionBox.userData.isIn) {
                 stairwayCollisionBox.userData.isIn = true;
                 displayStairwayPrompt();
+               
+                
             }
             document.addEventListener('keydown', onLevelUpKeyPress, { once: true });
         }
@@ -654,10 +653,11 @@ function displayStairwayPrompt() {
     }, 3000);
 }
 
-
 function onLevelUpKeyPress(event) {
     if (event.key === 'Enter') {
-        loadNextLevel(); 
+        console.log('Appui sur Entrée détecté, dispatch de l\'événement loadNextLevel');
+        const loadNextLevelEvent = new Event('loadNextLevel');
+        document.dispatchEvent(loadNextLevelEvent);
     }
 }
 
@@ -693,7 +693,7 @@ function createRoof(scene, collidableObjects) {
 
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
 
-    roof.position.set((config.gridCols * cellSize) / 2, config.wallHeight*1.3, (config.gridRows * cellSize) / 2);
+    roof.position.set((config.gridCols * cellSize) / 2, config.wallHeight * 1.3, (config.gridRows * cellSize) / 2);
 
     roof.rotation.x = -Math.PI / 2;
 
@@ -721,7 +721,7 @@ function getRandomPosition() {
         attempts++;
 
         if (attempts > maxAttempts) {
-            //console.warn("Could not find a free position after max attempts");
+            console.warn("Could not find a free position after max attempts");
             return null;
         }
     } while (isPositionOccupied(x, z) || isPositionInWall({ x, z }));
@@ -729,6 +729,7 @@ function getRandomPosition() {
     occupiedPositions.add(`${Math.floor(x)},${Math.floor(z)}`);
     return { x, z };
 }
+
 function isPositionOccupied(x, z) {
     return occupiedPositions.has(`${Math.floor(x)},${Math.floor(z)}`);
 }

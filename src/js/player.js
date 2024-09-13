@@ -1,8 +1,7 @@
+// player.js
 import * as THREE from 'three';
-import { checkCollisions } from './collision.js';
-import { adjustToGroundLevel } from './utils.js';
-import { updateManaBar } from './ui.js';
-import { shootSpell, getAvailableSpell } from './spells.js';
+import { updateManaBar, updateFireflyCounter, updateSpellUI, updateSpellSelectionBar } from './ui.js';
+import { getAvailableSpell ,shootSpell} from './spells.js';
 
 let velocityY = 0;
 const gravity = -9.8;
@@ -15,7 +14,8 @@ let mana = 100;
 const maxMana = 100;
 const manaRegenRate = 100;
 let canJump = true;
-
+let fireflyCount = 1000;
+let currentSpell = null;
 
 export class Player {
     constructor() {
@@ -28,7 +28,7 @@ export class Player {
     }
 
     increaseSpeed(multiplier, duration) {
-        //console.log(`Increasing speed by ${multiplier} for ${duration} seconds`);
+        ////console.log(`Increasing speed by ${multiplier} for ${duration} seconds`);
         this.speedMultiplier = multiplier;
         this.speedBoostEndTime = Date.now() + duration * 1000;
         this.updateSpeed();
@@ -50,9 +50,13 @@ export class Player {
     }
 }
 
+export function resetJump() {
+    canJump = true;
+}
+
 export const player = new Player();
 
-export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateMana, animationsMap) {
+export function handlePlayerMovement(character, characterBoundingBox, keysPressed, delta, mixer, setAction, checkCollisions, collidableObjects, cameraPitch, cameraDistance, updateCameraPosition, camera, isJumping, setIsJumping, updateManaBar, animationsMap) {
     if (!character || !characterBoundingBox) return;
 
     // Handle gravity and jumping logic
@@ -62,7 +66,7 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
         const isRunning = keysPressed['z'] && keysPressed['shift'];
         let targetSpeed = player.getSpeed(isRunning);
 
-      currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
+        currentSpeed = THREE.MathUtils.lerp(currentSpeed, targetSpeed, delta / speedTransitionDuration);
 
         if (!checkCollisions(verticalMove, collidableObjects, characterBoundingBox)) {
             character.position.y += verticalMove.y;
@@ -70,7 +74,7 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
             if (velocityY < 0) {
                 setIsJumping(false);
                 velocityY = 0;
-                adjustToGroundLevel(character, collidableObjects);
+                //adjustToGroundLevel(character, collidableObjects);
                 setAction('idle');
                 resetJump();
             } else {
@@ -141,9 +145,8 @@ export function handlePlayerMovement(character, characterBoundingBox, keysPresse
 
     // Mana regeneration over time
     mana = Math.min(mana + manaRegenRate * delta, maxMana);
-    updateMana(mana / maxMana);
+    updateManaBar(document.getElementById('manaBar'), mana / maxMana);
 }
-
 
 export function initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed) {
     if (!isJumping && canJump && character) {
@@ -162,11 +165,6 @@ export function initiateJump(character, mixer, animationsMap, setAction, isJumpi
     }
 }
 
-// Add this function to reset the jump ability when the player touches the ground
-export function resetJump() {
-    canJump = true;
-}
-
 export function initiatePunch(character, mixer, animationsMap, setAction, isJumping) {
     if (!isJumping && character) {
         setAction('punching');
@@ -175,12 +173,12 @@ export function initiatePunch(character, mixer, animationsMap, setAction, isJump
 
 export function castSpell(character, scene, collidableObjects, camera, verticalCorrection, shootSourceHeight, debugHelpers, fireflyCount, spell, enemies) {
     if (!spell) {
-        console.warn('No spell available.');
+        //console.warn('No spell available.');
         return null;
     }
 
     if (mana < spell.cost) {
-        console.warn('Not enough mana to cast spell.');
+        //console.warn('Not enough mana to cast spell.');
         return null;
     }
 
@@ -223,4 +221,28 @@ export function setMana(newMana) {
 
 export function getMaxMana() {
     return maxMana;
+}
+
+export function increaseMana(amount) {
+    setMana(Math.min(getMana() + amount, getMaxMana()));
+}
+
+export function addFirefly() {
+    fireflyCount += 1;
+    updateFireflyCounter(fireflyCount);
+    currentSpell = getAvailableSpell(fireflyCount);
+    updateSpellUI(currentSpell, fireflyCount);
+    updateSpellSelectionBar(fireflyCount);
+}
+
+export function getFireflyCount() {
+    return fireflyCount;
+}
+
+export function setFireflyCount(count) {
+    fireflyCount = count;
+    updateFireflyCounter(fireflyCount);
+    currentSpell = getAvailableSpell(fireflyCount);
+    updateSpellUI(currentSpell, fireflyCount);
+    updateSpellSelectionBar(fireflyCount);
 }

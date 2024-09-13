@@ -30,17 +30,17 @@
         }
         #seed-display {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            bottom: 5px;
+            left: 5px;
             color: #fff;
-            font-size: 16px;
+            font-size: 12px;
             background-color: rgba(0, 0, 0, 0.5);
             padding: 5px 10px;
             border-radius: 5px;
         }
         #instructions {
             position: absolute;
-            top: 10px;
+            top: 100px;
             right: 20px;
             color: #fff;
             font-size: 14px;
@@ -49,24 +49,72 @@
             border-radius: 5px;
             text-align: right;
         }
-        @font-face {
-    font-family: 'Vinque';
-    src: url('fonts/vinque/vinque.otf') format('opentype');
-    font-weight: normal;
-    font-style: normal;
-}
+        /* Styles pour le menu principal */
+        #main-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #main-menu h1 {
+            color: #ffffff;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #main-menu button {
+            padding: 10px 20px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* Styles pour l'écran de chargement */
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none; /* Caché par défaut */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #loading-screen h2 {
+            color: #ffffff;
+            font-size: 36px;
+        }
     </style>
 </head>
 <body>
     <div id="instructions">
-        <strong>Controls:</strong><br />
-        Move: ZQSD<br />
-        Jump: Spacebar<br />
-        Cast Spell: Left Click<br />
-        Switch Spells: 1, 2, 3<br />
-        Rotate Camera: Mouse Move<br />
-        Zoom: Mouse Wheel
+        <strong>Contrôles :</strong><br />
+        Déplacement : ZQSD<br />
+        Saut : Barre d'espace<br />
+        Lancer un sort : Clic gauche<br />
+        Changer de sort : 1, 2, 3<br />
+        Rotation de la caméra : Mouvement de la souris<br />
+        Zoom : Molette de la souris
     </div>
+
+    <!-- Menu principal -->
+    <div id="main-menu">
+        <h1>Firefly Tower</h1>
+        <button id="play-button">Jouer</button>
+    </div>
+
+    <!-- Écran de chargement -->
+    <div id="loading-screen">
+        <h2>Chargement...</h2>
+    </div>
+
     <script type="module" src="/src/js/game.js"></script>
 </body>
 </html>
