@@ -42,6 +42,7 @@ import Stats from 'stats.js';
 import { spawnEnemy } from './enemy.js';
 import { NavMesh } from './enemyNavigation.js';
 
+
 let navMesh;
 let scene, camera, renderer, mixer, clock;
 let keysPressed = {};
@@ -55,6 +56,7 @@ let characterBoundingBox = null;
 let animationsMap = new Map();
 let currentAction = '';
 let isJumping = false;
+let isPunching = false;
 let spellAnimations = [];
 let manaBarElement = null;
 let seedDisplayElement = null;
@@ -71,6 +73,8 @@ let stairsPromptVisible = false;
 let stairsPrompt = null;
 let selectedSpellIndex = 0;
 let enemies = [];
+let isRunning = false;
+
 
 const wizardCollisionBoxSize = new THREE.Vector3(0.5, 1, 0.5);
 const wizardCollisionBoxOffset = new THREE.Vector3(0, 0.5, 0);
@@ -95,6 +99,8 @@ function init() {
         });
     }
 }
+
+
 
 function startGame() {
     isLoading = true;
@@ -220,6 +226,8 @@ function loadLevel() {
     });
 }
 
+
+
 function animate(composer) {
     if (!controlsEnabled) return; // Arrête l'animation si les contrôles ne sont pas activés
 
@@ -229,21 +237,22 @@ function animate(composer) {
     if (character && characterBoundingBox) {
         handlePlayerMovement(
             character,
-            characterBoundingBox,
-            keysPressed,
-            delta,
-            mixer,
-            setAction,
-            checkCollisions,
-            collidableObjects,
-            cameraPitch,
-            cameraDistance,
-            updateCameraPosition,
-            camera,
-            isJumping,
-            setIsJumping,
-            updateManaBar,
-            animationsMap
+        characterBoundingBox,
+        keysPressed,
+        delta,
+        mixer,
+        setAction,
+        checkCollisions,
+        collidableObjects,
+        cameraPitch,
+        cameraDistance,
+        updateCameraPosition,
+        camera,
+        isJumping,
+        setIsJumping,
+        updateManaBar,
+        animationsMap,
+        isPunching
         );
     }
 
@@ -260,13 +269,11 @@ function animate(composer) {
 
     // Mise à jour des ennemis existants
     enemies = enemies.filter(enemy => {
-        if (enemy.health > 0) {
+        if (!enemy.isDead) {
             enemy.update(delta);
             return true;
         } else {
-            if (enemy.mesh) {
-                scene.remove(enemy.mesh);
-            }
+            // L'ennemi est mort, on le retire du tableau
             return false;
         }
     });
@@ -276,28 +283,86 @@ function animate(composer) {
     requestAnimationFrame(() => animate(composer));
 }
 
-function handleKeyDown(event) {
-    if (!controlsEnabled) return;
-    keysPressed[event.key.toLowerCase()] = true;
-    if (event.key.toLowerCase() === ' ') {
-        initiateJump(character, mixer, animationsMap, setAction, isJumping, setIsJumping, keysPressed);
+// game.js
+
+// Assurez-vous que 'keysPressed' est déclaré au niveau global ou accessible dans le contexte
+
+function handleKeyUp(event) {
+    // Convertir la touche en minuscule pour uniformiser
+    const key = event.key.toLowerCase();
+
+    // Mettre à jour l'état de la touche dans 'keysPressed'
+    keysPressed[key] = false;
+
+    console.log(`Key released: ${key}`, keysPressed);
+
+    // Si nécessaire, ajoutez des actions spécifiques lors du relâchement de certaines touches
+    // Par exemple, si vous souhaitez arrêter une action lorsque la touche est relâchée
+
+    // Si vous utilisez des états spécifiques pour les actions du personnage, vous pouvez les gérer ici
+    if (key === 'z' || key === 'q' || key === 's' || key === 'd') {
+        // Vérifier si aucune des touches de déplacement n'est pressée
+        if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !keysPressed['d']) {
+            setAction('idle');
+        }
     }
-    if (event.key.toLowerCase() === 'enter' && nearStairs) {
+
+    // Si vous avez des états comme 'isRunning', vous pouvez les gérer ici
+    if (key === 'shift') {
+        // Par exemple, désactiver le mode course
+        isRunning = false;
+    }
+
+    // Empêcher le comportement par défaut du navigateur si nécessaire
+    // Par exemple, pour empêcher le défilement lors de l'utilisation des touches fléchées
+    // event.preventDefault();
+}
+document.addEventListener('keyup', handleKeyUp);
+
+
+function handleKeyDown(event) {
+    const key = event.key.toLowerCase();
+
+    if (!controlsEnabled) return;
+
+    keysPressed[key] = true;
+
+    if (key === 'shift') {
+        isRunning = true;
+    }
+
+    if (key === ' ') {
+        initiateJump(
+            character,
+            mixer,
+            animationsMap,
+            setAction,
+            isJumping,
+            isPunching,
+            setIsJumping,
+            keysPressed,
+            collidableObjects,
+            enemies,
+            scene // Added collidableObjects
+        );
+    }
+
+    if (key === 'enter' && nearStairs) {
         loadNextLevel();
     }
 
-    const key = event.key.toLowerCase();
     const spellKeys = ['&', 'é', '"', "'", '(', '-', 'è', '_', 'ç', 'à', ')', '='];
     const index = spellKeys.indexOf(key);
 
     if (index !== -1) {
-        if (index === 0 || (spells[index - 1] && getFireflyCount() >= spells[index - 1].firefliesRequired)) {
+        const fireflyCount = getFireflyCount();
+        if (index === 0 || (spells[index - 1] && fireflyCount >= spells[index - 1].firefliesRequired)) {
             selectedSpellIndex = index;
             updateSelectedSpell(key);
 
-            // Mettre à jour l'UI du sort immédiatement lorsque qu'un nouveau sort est sélectionné
+            // Update the spell UI immediately when a new spell is selected
             const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
-            updateSpellUI(selectedSpell, getFireflyCount());
+            updateSpellUI(selectedSpell, fireflyCount);
         }
     }
 }
@@ -305,12 +370,16 @@ function handleKeyDown(event) {
 document.addEventListener('keydown', handleKeyDown);
 
 document.addEventListener('keyup', (event) => {
-    if (!controlsEnabled) return;
     keysPressed[event.key.toLowerCase()] = false;
+    if (event.key.toLowerCase() === 'shift') {
+        isRunning = false;
+    }
     if (!keysPressed['z'] && !keysPressed['q'] && !keysPressed['s'] && !isJumping) {
         setAction('idle');
     }
 });
+
+
 
 document.addEventListener('mousemove', (event) => {
     if (!controlsEnabled) return;
@@ -425,26 +494,50 @@ function setIsJumping(state) {
     isJumping = state;
 }
 
+function setIsPunching(state) {
+    isPunching = state;
+}
+
+// game.js
 function castSelectedSpell() {
-    const spell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
-    const spellAnimation = castSpell(
-        character,
-        scene,
-        collidableObjects,
-        camera,
-        verticalCorrection,
-        shootSourceHeight,
-        debugHelpers,
-        getFireflyCount(),
-        spell,
-        enemies
-    );
-    if (spellAnimation) {
-        spellAnimations.push(spellAnimation);
+    if (selectedSpellIndex === 0) {
+        // Si le punch est sélectionné
+        initiatePunch(
+            character,
+            mixer,
+            animationsMap,
+            setAction,
+            isJumping,
+            isPunching,
+            setIsPunching,
+            keysPressed,
+            collidableObjects,
+            enemies,
+            scene // Passer la scène ici
+        );
     } else {
-        initiatePunch(character, mixer, animationsMap, setAction, isJumping);
+        // Si un sort est sélectionné
+        const spell = spells[selectedSpellIndex - 1];
+        const spellAnimation = castSpell(
+            character,
+            scene,
+            collidableObjects,
+            camera,
+            verticalCorrection,
+            shootSourceHeight,
+            debugHelpers,
+            getFireflyCount(),
+            spell,
+            enemies
+        );
+        if (spellAnimation) {
+            spellAnimations.push(spellAnimation);
+        }
     }
 }
+
+
+
 
 function updateCameraRotation(event) {
     const movementX = event.movementX || 0;

@@ -86,7 +86,7 @@ export function updateFireflyCounter(count) {
     if (counter) {
         counter.innerText = `Fireflies: ${count}`;
     } else {
-        console.warn("Firefly counter element not found");
+        //console.warn("Firefly counter element not found");
     }
 }
 
