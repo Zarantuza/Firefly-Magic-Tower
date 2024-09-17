@@ -9,7 +9,7 @@ class CollectiblePool {
         // Pre-create the pool of collectible objects
         for (let i = 0; i < poolSize; i++) {
             const geometry = new THREE.SphereGeometry(0.5, 16, 16);
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const material = new THREE.MeshToonMaterial ({ color: 0x00ff00 });
             const collectible = new THREE.Mesh(geometry, material);
             collectible.visible = false;
 

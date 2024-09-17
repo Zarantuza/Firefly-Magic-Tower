@@ -1,8 +1,13 @@
 // game.js
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';  // Add this line
+
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';  // Add this line
+
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { createLevel, checkCollisionsForCollectibles } from './level.js';
 import {
@@ -43,7 +48,8 @@ import Stats from 'stats.js';
 import { spawnEnemy } from './enemy.js';
 import { NavMesh } from './enemyNavigation.js';
 
-
+let composer, outlinePass;
+let effect;
 let navMesh;
 let scene, camera, renderer, mixer, clock;
 let keysPressed = {};
@@ -142,6 +148,35 @@ function createGameOverScreen() {
     gameOverScreenCreated = true;
 }
 
+function initializeRenderer() {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Create EffectComposer
+    composer = new EffectComposer(renderer);
+
+    // Create RenderPass
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Create RenderPixelatedPass (if you want to keep this effect)
+    const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera);
+    composer.addPass(renderPixelatedPass);
+
+    // Create OutlinePass
+    outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+    outlinePass.edgeStrength = 3;
+    outlinePass.edgeGlow = 0;
+    outlinePass.edgeThickness = 1;
+    outlinePass.pulsePeriod = 0;
+    outlinePass.visibleEdgeColor.set('#ffffff');
+    outlinePass.hiddenEdgeColor.set('#190a05');
+    composer.addPass(outlinePass);
+
+    // Create OutputPass
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+}
 
 function showGameOverScreen(visible) {
     if (!gameOverScreenCreated) {
@@ -206,16 +241,21 @@ function startGame() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputEncoding = THREE.sRGBEncoding;
-
     document.body.appendChild(renderer.domElement);
 
-    const composer = new EffectComposer(renderer);
-    const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera);
-    composer.addPass(renderPixelatedPass);
+    initializeRenderer();
 
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
+    effect = new OutlineEffect(renderer);
+
+    // Remove duplicate line
+    // document.body.appendChild(renderer.domElement);
+
+    // Remove these lines as they're now handled in initializeRenderer
+    // const composer = new EffectComposer(renderer);
+    // const renderPixelatedPass = new RenderPixelatedPass(1, scene, camera);
+    // composer.addPass(renderPixelatedPass);
+    // const outputPass = new OutputPass();
+    // composer.addPass(outputPass);
 
     const light1 = new THREE.DirectionalLight(0xfff5e1, 0.8);
     light1.position.set(10, 20, 10);
@@ -236,7 +276,7 @@ function startGame() {
         controlsEnabled = true;
         showLoadingScreen(false);
         // Démarrer la boucle d'animation
-        animate(composer);
+        animate();  // Remove composer argument
     }).catch((error) => {
         console.error('Échec du chargement du jeu :', error);
     });
@@ -280,7 +320,7 @@ function loadLevel() {
                 wizardCollisionBoxSize.y,
                 wizardCollisionBoxSize.z
             );
-            const boundingBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, visible: false });
+            const boundingBoxMaterial = new THREE.MeshToonMaterial ({ color: 0x00ff00, wireframe: true, visible: false });
             characterBoundingBox = new THREE.Mesh(boundingBoxGeometry, boundingBoxMaterial);
 
             characterBoundingBox.position.copy(wizardCollisionBoxOffset);
@@ -318,7 +358,7 @@ function loadLevel() {
 
 
 
-function animate(composer) {
+function animate() {
     if (!controlsEnabled) return; // Stops animation when controls are disabled (e.g., after game over)
 
     const delta = clock.getDelta();
@@ -391,11 +431,26 @@ function animate(composer) {
         updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
     }
 
-    // Render the scene
+    // Update outline pass to highlight interactive objects
+    updateOutlinePass();
+
+    // Render the scene using EffectComposer
     composer.render();
 
     // Request the next frame
-    requestAnimationFrame(() => animate(composer));
+    requestAnimationFrame(animate);
+}
+
+function updateOutlinePass() {
+    // Add objects to be outlined
+    const outlineObjects = [];
+    if (character) outlineObjects.push(character);
+    enemies.forEach(enemy => {
+        if (enemy.mesh) outlineObjects.push(enemy.mesh);
+    });
+    // Add other interactive objects like collectibles, stairs, etc.
+
+    outlinePass.selectedObjects = outlineObjects;
 }
 
 

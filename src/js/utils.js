@@ -28,6 +28,23 @@ export function onMouseMove(character, cameraPitch, cameraDistance, updateCamera
     };
 }
 
+export function createToonMaterial(hue, saturation, lightness, steps = 4) {
+    const colors = new Uint8Array(steps);
+    for (let c = 0; c < steps; c++) {
+        colors[c] = (c / (steps - 1)) * 256;
+    }
+
+    const gradientMap = new THREE.DataTexture(colors, colors.length, 1, THREE.RedFormat);
+    gradientMap.needsUpdate = true;
+
+    const color = new THREE.Color().setHSL(hue, saturation, lightness);
+
+    return new THREE.MeshToonMaterial({
+        color: color,
+        gradientMap: gradientMap
+    });
+}
+
 export function updateCameraRotation(event) {
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
@@ -79,7 +96,7 @@ export function adjustToGroundLevel(character, collidableObjects) {
 export function fadeToBlack(scene, clock, callback) {
     const fadeDuration = 1000;
     const fadePlane = new THREE.PlaneGeometry(30, 30);
-    const fadeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, transparent: true });
+    const fadeMaterial = new THREE.MeshToonMaterial ({ color: 0x000000, opacity: 0, transparent: true });
     const fadeMesh = new THREE.Mesh(fadePlane, fadeMaterial);
 
     fadeMesh.position.set(0, 5, -10);

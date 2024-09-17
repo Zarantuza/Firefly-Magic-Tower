@@ -1,11 +1,13 @@
 // level.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { fadeToBlack, createRNG } from './utils.js';
+import { fadeToBlack, createRNG,createToonMaterial } from './utils.js';
 import { NavMesh } from './enemyNavigation.js';
 import { spawnEnemy } from './enemy.js';
 import { player, increaseMana, addFirefly } from './player.js';  // Importer directement depuis player.js
 import { placeItems } from './items.js';  // Importer la fonction placeItems
+
+
 
 // Configuration parameters
 const config = {
@@ -372,54 +374,45 @@ function visualizeNavMesh(scene, navMesh) {
 
 function createMazeGeometry(scene, collidableObjects) {
     const textureLoader = new THREE.TextureLoader();
+
+    // Load textures
     const wallTexture = textureLoader.load(config.wallTexturePath);
     const wallNormalMap = textureLoader.load(config.wallNormalMapPath);
     const wallDisplacementMap = textureLoader.load(config.wallDisplacementMapPath);
-
-    wallTexture.wrapS = THREE.RepeatWrapping;
-    wallTexture.wrapT = THREE.RepeatWrapping;
-    wallTexture.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
-
-    wallNormalMap.wrapS = THREE.RepeatWrapping;
-    wallNormalMap.wrapT = THREE.RepeatWrapping;
-    wallNormalMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
-
-    wallDisplacementMap.wrapS = THREE.RepeatWrapping;
-    wallDisplacementMap.wrapT = THREE.RepeatWrapping;
-    wallDisplacementMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
-
-    const wallMaterial = new THREE.MeshPhongMaterial({
-        map: wallTexture,
-        normalMap: wallNormalMap,
-        normalScale: new THREE.Vector2(config.wallNormalStrength, config.wallNormalStrength),
-        displacementMap: wallDisplacementMap,
-        displacementScale: config.wallDisplacementScale,
-    });
-
     const floorTexture = textureLoader.load(config.floorTexturePath);
     const floorNormalMap = textureLoader.load(config.floorNormalMapPath);
     const floorDisplacementMap = textureLoader.load(config.floorDisplacementMapPath);
 
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
-
-    floorNormalMap.wrapS = THREE.RepeatWrapping;
-    floorNormalMap.wrapT = THREE.RepeatWrapping;
-    floorNormalMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
-
-    floorDisplacementMap.wrapS = THREE.RepeatWrapping;
-    floorDisplacementMap.wrapT = THREE.RepeatWrapping;
-    floorDisplacementMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
-
-    const floorMaterial = new THREE.MeshPhongMaterial({
-        map: floorTexture,
-        normalMap: floorNormalMap,
-        normalScale: new THREE.Vector2(config.floorNormalStrength, config.floorNormalStrength),
-        displacementMap: floorDisplacementMap,
-        displacementScale: config.floorDisplacementScale,
+    // Set up texture wrapping and repeat
+    [wallTexture, wallNormalMap, wallDisplacementMap, floorTexture, floorNormalMap, floorDisplacementMap].forEach(texture => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     });
 
+    wallTexture.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
+    wallNormalMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
+    wallDisplacementMap.repeat.set(config.wallTextureRepeat.x, config.wallTextureRepeat.y);
+    floorTexture.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+    floorNormalMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+    floorDisplacementMap.repeat.set(config.floorTextureRepeat.x, config.floorTextureRepeat.y);
+
+    // Create toon materials
+    const wallMaterial = createToonMaterial(0.1, 0.5, 0.5); // Adjust HSL values as needed
+    const floorMaterial = createToonMaterial(0.3, 0.5, 0.3);
+
+    // Apply textures to toon materials
+    wallMaterial.map = wallTexture;
+    wallMaterial.normalMap = wallNormalMap;
+    wallMaterial.normalScale.set(config.wallNormalStrength, config.wallNormalStrength);
+    wallMaterial.displacementMap = wallDisplacementMap;
+    wallMaterial.displacementScale = config.wallDisplacementScale;
+
+    floorMaterial.map = floorTexture;
+    floorMaterial.normalMap = floorNormalMap;
+    floorMaterial.normalScale.set(config.floorNormalStrength, config.floorNormalStrength);
+    floorMaterial.displacementMap = floorDisplacementMap;
+    floorMaterial.displacementScale = config.floorDisplacementScale;
+
+    // Create maze geometry
     for (let row = 0; row < config.gridRows; row++) {
         for (let col = 0; col < config.gridCols; col++) {
             const x = col * config.cellSize;
@@ -433,19 +426,12 @@ function createMazeGeometry(scene, collidableObjects) {
             const wallEast = maze[row][col].east;
 
             // Vertical beams at corners
-            if (wallNorth || wallWest) {
-                createVerticalBeam(scene, x, z, collidableObjects);
-            }
-            if (wallNorth || wallEast) {
-                createVerticalBeam(scene, x + config.cellSize, z, collidableObjects);
-            }
-            if (wallSouth || wallWest) {
-                createVerticalBeam(scene, x, z + config.cellSize, collidableObjects);
-            }
-            if (wallSouth || wallEast) {
-                createVerticalBeam(scene, x + config.cellSize, z + config.cellSize, collidableObjects);
-            }
+            if (wallNorth || wallWest) createVerticalBeam(scene, x, z, collidableObjects);
+            if (wallNorth || wallEast) createVerticalBeam(scene, x + config.cellSize, z, collidableObjects);
+            if (wallSouth || wallWest) createVerticalBeam(scene, x, z + config.cellSize, collidableObjects);
+            if (wallSouth || wallEast) createVerticalBeam(scene, x + config.cellSize, z + config.cellSize, collidableObjects);
 
+            // Create walls and ceiling beams
             if (wallNorth) {
                 createWall(scene, x + config.cellSize / 2, config.wallHeight / 2 + 1, z, config.cellSize, config.wallHeight, config.wallThickness, wallMaterial, collidableObjects);
                 createCeilingBeam(scene, x + config.cellSize / 2, config.wallHeight + 1, z, config.cellSize, config.wallThickness, collidableObjects);
@@ -464,6 +450,7 @@ function createMazeGeometry(scene, collidableObjects) {
             }
         }
     }
+
     createRoof(scene, collidableObjects);
     createCeiling(scene, collidableObjects, gridCols, gridRows);
 }
@@ -591,13 +578,12 @@ function placeStairway(scene, collidableObjects, character) {
     columnNormalMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
     columnDisplacementMap.repeat.set(config.columnTextureRepeat.x, config.columnTextureRepeat.y);
 
-    const columnMaterial = new THREE.MeshPhongMaterial({
-        map: columnTexture,
-        normalMap: columnNormalMap,
-        normalScale: new THREE.Vector2(config.columnNormalStrength, config.columnNormalStrength),
-        displacementMap: columnDisplacementMap,
-        displacementScale: config.columnDisplacementScale,
-    });
+    const columnMaterial = createToonMaterial(0.1, 0.3, 0.5);
+    columnMaterial.map = columnTexture;
+    columnMaterial.normalMap = columnNormalMap;
+    columnMaterial.normalScale.set(config.columnNormalStrength, config.columnNormalStrength);
+    columnMaterial.displacementMap = columnDisplacementMap;
+    columnMaterial.displacementScale = config.columnDisplacementScale;
 
     const column = new THREE.Mesh(columnGeometry, columnMaterial);
     column.position.set(x, 3, z);
@@ -617,13 +603,12 @@ function placeStairway(scene, collidableObjects, character) {
     stairsNormalMap.repeat.set(config.stairsTextureRepeat.x, config.stairsTextureRepeat.y);
     stairsDisplacementMap.repeat.set(config.stairsTextureRepeat.x, config.stairsTextureRepeat.y);
 
-    const stairsMaterial = new THREE.MeshPhongMaterial({
-        map: stairsTexture,
-        normalMap: stairsNormalMap,
-        normalScale: new THREE.Vector2(config.stairsNormalStrength, config.stairsNormalStrength),
-        displacementMap: stairsDisplacementMap,
-        displacementScale: config.stairsDisplacementScale,
-    });
+    const stairsMaterial = createToonMaterial(0.05, 0.4, 0.6);
+    stairsMaterial.map = stairsTexture;
+    stairsMaterial.normalMap = stairsNormalMap;
+    stairsMaterial.normalScale.set(config.stairsNormalStrength, config.stairsNormalStrength);
+    stairsMaterial.displacementMap = stairsDisplacementMap;
+    stairsMaterial.displacementScale = config.stairsDisplacementScale;
 
     const steps = Math.ceil(5 / 0.2);
     for (let i = 0; i < steps; i++) {
@@ -646,7 +631,7 @@ function placeStairway(scene, collidableObjects, character) {
 
     // Ajout du StairwayCollisionBox pour détecter la proximité des escaliers
     const stairwayBoxGeometry = new THREE.BoxGeometry(config.cellSize, 5, config.cellSize);
-    const stairwayBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, visible: false });
+    const stairwayBoxMaterial = new THREE.MeshToonMaterial({ color: 0x0000ff, visible: false });
     const stairwayCollisionBox = new THREE.Mesh(stairwayBoxGeometry, stairwayBoxMaterial);
     stairwayCollisionBox.position.set(x, 2.5, z);
     scene.add(stairwayCollisionBox);
@@ -660,8 +645,6 @@ function placeStairway(scene, collidableObjects, character) {
             if (!stairwayCollisionBox.userData.isIn) {
                 stairwayCollisionBox.userData.isIn = true;
                 displayStairwayPrompt();
-               
-                
             }
             document.addEventListener('keydown', onLevelUpKeyPress, { once: true });
         }
@@ -780,6 +763,22 @@ export function checkCollisionsForCollectibles(character, collidableObjects) {
 }
 
 function addCastleLights(scene) {
+    // Main directional light for sharp shadows
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    mainLight.position.set(1, 1, 1);
+    mainLight.castShadow = true;
+    scene.add(mainLight);
+
+    // Softer fill light from the opposite direction
+    const fillLight = new THREE.DirectionalLight(0x9999ff, 0.3);
+    fillLight.position.set(-1, 0.5, -1);
+    scene.add(fillLight);
+
+    // Ambient light for overall illumination
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    scene.add(ambientLight);
+
+    // Point lights for atmosphere
     const lightPositions = [
         new THREE.Vector3(config.gridCols * config.cellSize / 2, config.wallHeight, config.gridRows * config.cellSize / 2),
         new THREE.Vector3(config.gridCols * config.cellSize / 4, config.wallHeight, config.gridRows * config.cellSize / 4),
@@ -789,19 +788,28 @@ function addCastleLights(scene) {
     ];
 
     lightPositions.forEach(pos => {
-        const light = new THREE.PointLight(config.lightColor, config.lightIntensity, 20);
+        const light = new THREE.PointLight(0xffaa00, 0.5, 20);
         light.position.copy(pos);
         scene.add(light);
 
+        // Create a small sphere to represent the light source
+        const lightSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+        );
+        lightSphere.position.copy(pos);
+        scene.add(lightSphere);
+
         const flickerIntensity = () => {
-            const intensity = config.lightIntensity + Math.random() * 1.5;
+            const intensity = 0.5 + Math.random() * 0.2;
             light.intensity = intensity;
         };
         setInterval(flickerIntensity, 250);
     });
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, config.ambientLightIntensity);
-    scene.add(ambientLight);
+    // Add a subtle hemispheric light for more natural lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.2);
+    scene.add(hemiLight);
 }
 
 export { config };

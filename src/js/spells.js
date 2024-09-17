@@ -21,7 +21,7 @@ export const spells = [
             // Create a spiral trail effect
             const trail = new THREE.Mesh(
                 new THREE.SphereGeometry(0.05, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 })
+                new THREE.MeshToonMaterial ({ color: 0x00ffff, transparent: true, opacity: 0.7 })
             );
             trail.position.copy(spell.position);
             spell.parent.add(trail);
@@ -45,7 +45,7 @@ export const spells = [
             if (Math.random() < 0.3) {
                 const particle = new THREE.Mesh(
                     new THREE.BoxGeometry(0.1, 0.1, 0.1),
-                    new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 })
+                    new THREE.MeshToonMaterial ({ color: 0xffaa00, transparent: true, opacity: 0.8 })
                 );
                 particle.position.copy(spell.position).add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.5));
                 particle.velocity = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.1);
@@ -70,7 +70,7 @@ export const spells = [
             if (Math.random() < 0.2) {
                 const crystal = new THREE.Mesh(
                     new THREE.OctahedronGeometry(0.1),
-                    new THREE.MeshBasicMaterial({ color: 0xadd8e6, transparent: true, opacity: 0.6 })
+                    new THREE.MeshToonMaterial ({ color: 0xadd8e6, transparent: true, opacity: 0.6 })
                 );
                 crystal.position.copy(spell.position);
                 crystal.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
@@ -116,7 +116,7 @@ export const spells = [
             for (let i = 0; i < arcCount; i++) {
                 const arc = new THREE.Mesh(
                     new THREE.CylinderGeometry(0.02, 0.02, 1),
-                    new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.7 })
+                    new THREE.MeshToonMaterial ({ color: 0xffd700, transparent: true, opacity: 0.7 })
                 );
                 const angle = (i / arcCount) * Math.PI * 2 + time;
                 arc.position.copy(spell.position).add(new THREE.Vector3(
@@ -139,7 +139,7 @@ export const spells = [
             if (Math.random() < 0.3) {
                 const particle = new THREE.Mesh(
                     new THREE.SphereGeometry(0.05),
-                    new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 })
+                    new THREE.MeshToonMaterial ({ color: 0xffff00, transparent: true, opacity: 0.8 })
                 );
                 particle.position.copy(spell.position);
                 particle.velocity = new THREE.Vector3(
@@ -177,7 +177,7 @@ export const spells = [
             if (Math.random() < 0.2) {
                 const particle = new THREE.Mesh(
                     new THREE.SphereGeometry(0.05),
-                    new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.6 })
+                    new THREE.MeshToonMaterial ({ color: 0x00ff00, transparent: true, opacity: 0.6 })
                 );
                 particle.position.copy(spell.position).add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(spell.scale.x));
                 particle.scale.setScalar(Math.random() * 0.5 + 0.5);
@@ -203,7 +203,7 @@ export const spells = [
                 const angle = Date.now() * 0.003 + i * Math.PI * 2 / 3;
                 const wisp = new THREE.Mesh(
                     new THREE.SphereGeometry(0.05),
-                    new THREE.MeshBasicMaterial({ color: 0xd8bfd8, transparent: true, opacity: 0.7 })
+                    new THREE.MeshToonMaterial ({ color: 0xd8bfd8, transparent: true, opacity: 0.7 })
                 );
                 wisp.position.copy(spell.position).add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(0.3));
                 spell.parent.add(wisp);
@@ -231,7 +231,7 @@ export const spells = [
             if (Math.random() < 0.3) {
                 const rock = new THREE.Mesh(
                     new THREE.DodecahedronGeometry(0.1),
-                    new THREE.MeshBasicMaterial({ color: 0x8b4513 })
+                    new THREE.MeshToonMaterial ({ color: 0x8b4513 })
                 );
                 rock.position.copy(spell.position).add(new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).multiplyScalar(0.2));
                 rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
@@ -259,7 +259,7 @@ export const spells = [
             if (Math.random() < 0.5) {
                 const particle = new THREE.Mesh(
                     new THREE.PlaneGeometry(0.1, 0.1),
-                    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })
+                    new THREE.MeshToonMaterial ({ color: 0xffffff, transparent: true, opacity: 0.5 })
                 );
                 particle.position.copy(spell.position).add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.5));
                 particle.lookAt(particle.position.clone().add(spell.velocity));
@@ -286,7 +286,7 @@ export const spells = [
             for (let i = 0; i < 5; i++) {
                 const particle = new THREE.Mesh(
                     new THREE.SphereGeometry(0.05),
-                    new THREE.MeshBasicMaterial({ color: 0xfffacd, transparent: true, opacity: 0.7 })
+                    new THREE.MeshToonMaterial ({ color: 0xfffacd, transparent: true, opacity: 0.7 })
                 );
                 const angle = Math.random() * Math.PI * 2;
                 const radius = Math.random() * spell.scale.x;
@@ -331,7 +331,7 @@ export const spells = [
             if (Math.random() < 0.2) {
                 const particle = new THREE.Mesh(
                     new THREE.TetrahedronGeometry(0.1),
-                    new THREE.MeshBasicMaterial({ color: 0x4b0082, transparent: true, opacity: 0.8 })
+                    new THREE.MeshToonMaterial ({ color: 0x4b0082, transparent: true, opacity: 0.8 })
                 );
                 particle.position.copy(spell.position).add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(spell.scale.x));
                 particle.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);

@@ -382,7 +382,7 @@ function applyPunchDamage(character, enemies, scene) {
 
 function createImpactEffect(position, scene) {
     const impactGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-    const impactMaterial = new THREE.MeshBasicMaterial({
+    const impactMaterial = new THREE.MeshToonMaterial ({
         color: 0xffff00,
         emissive: 0xffff00,
         transparent: true,
