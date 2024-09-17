@@ -1,11 +1,10 @@
-// enemy.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { adjustToGroundLevel } from './utils.js';
 import { NavMesh } from './enemyNavigation.js';
 
-const ENEMY_SPEED = 2;
-const MINIMUM_SPAWN_DISTANCE = 10; // Minimum distance from player
+const ENEMY_SPEED = 1;
+const MINIMUM_SPAWN_DISTANCE = 10;
 const MINIMUM_ENEMY_DISTANCE = 5;
 
 const ENEMY_TYPES = {
@@ -39,15 +38,15 @@ export class Enemy {
         this.damage = ENEMY_TYPES[type].damage;
         this.scale = ENEMY_TYPES[type].scale;
         this.mesh = null;
-        this.mixer = null;
+        this.animationMixer = null;
+        this.currentAction = null;
         this.animationsMap = new Map();
-        this.currentAction = '';
         this.targetPosition = null;
         this.isLoaded = false;
         this.navMesh = navMesh;
         this.path = [];
         this.currentPathIndex = 0;
-        this.isDead = false; // Nouvelle propriété pour suivre l'état de l'ennemi
+        this.isDead = false;
     }
 
     async loadModel() {
@@ -72,14 +71,20 @@ export class Enemy {
 
                 this.scene.add(this.mesh);
 
-                this.mixer = new THREE.AnimationMixer(this.mesh);
+                this.animationMixer = new THREE.AnimationMixer(this.mesh);
 
                 gltf.animations.forEach((clip) => {
-                    const action = this.mixer.clipAction(clip);
+                    const action = this.animationMixer.clipAction(clip);
                     this.animationsMap.set(clip.name.toLowerCase(), action);
                 });
 
-                this.setAction('idle');
+                if (this.animationsMap.has('idle')) {
+                    this.setAction('idle');
+                } else if (gltf.animations.length > 0) {
+                    this.currentAction = this.animationMixer.clipAction(gltf.animations[0]);
+                    this.currentAction.play();
+                }
+
                 this.isLoaded = true;
 
                 // Ajustement de la position Y et appel à adjustToGroundLevel
@@ -88,6 +93,7 @@ export class Enemy {
 
                 // Trouver une nouvelle cible pour le déplacement
                 this.findNewTarget();
+                console.log(`Enemy of type ${this.type} loaded at position:`, this.mesh.position);
                 resolve(this);
             }, undefined, (error) => {
                 console.error('An error happened while loading the enemy model:', error);
@@ -107,14 +113,17 @@ export class Enemy {
                 previousAction.fadeOut(0.5);
             }
             this.currentAction = actionName;
+            console.log(`Enemy action set to: ${actionName}`);
         }
     }
 
     update(delta) {
         if (!this.isLoaded || !this.mesh || this.isDead) return;
 
-        if (this.mixer) {
-            this.mixer.update(delta);
+        
+
+        if (this.animationMixer) {
+            this.animationMixer.update(delta);
         }
 
         if (!this.path || this.currentPathIndex >= this.path.length) {
@@ -141,12 +150,13 @@ export class Enemy {
                 this.setAction('walk');
             } else {
                 // En cas de collision, chercher une nouvelle cible
-                
                 this.findNewTarget();
             }
         } else {
             this.setAction('idle');
         }
+
+        console.log(`Enemy position updated: ${this.mesh.position.x}, ${this.mesh.position.y}, ${this.mesh.position.z}`);
     }
 
     checkCollision(movement) {
@@ -157,11 +167,13 @@ export class Enemy {
 
     findNewTarget() {
         if (!this.navMesh || typeof this.navMesh.getRandomNode !== 'function') {
+            console.warn('NavMesh is not properly initialized for enemy');
             return;
         }
 
         const randomNode = this.navMesh.getRandomNode();
         if (!randomNode) {
+            console.warn('No valid target found for enemy');
             return;
         }
 
@@ -177,6 +189,7 @@ export class Enemy {
             this.path = [this.targetPosition];
         }
         this.currentPathIndex = 0;
+        console.log(`New target found for enemy: ${this.targetPosition.x}, ${this.targetPosition.y}, ${this.targetPosition.z}`);
     }
 
     takeDamage(amount) {
@@ -192,7 +205,8 @@ export class Enemy {
         if (this.mesh) {
             this.scene.remove(this.mesh);
         }
-        this.isDead = true; // Marquer l'ennemi comme mort
+        this.isDead = true;
+        console.log(`Enemy ${this.type} has died`);
     }
 }
 
@@ -206,12 +220,17 @@ export function spawnEnemy(scene, collidableObjects, navMesh) {
         }
 
         const position = randomNode.position.clone();
+        position.y = 1; // Manually set the Y position here (change 3 to your desired height)
         const enemyTypes = Object.keys(ENEMY_TYPES);
         const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
 
+        console.log(`Spawning ${randomType} enemy at position:`, position);
+
         const enemy = new Enemy(scene, position, collidableObjects, randomType, navMesh);
         enemy.loadModel().then(() => {
-            adjustEnemyToGroundLevel(enemy, collidableObjects);
+            // You might want to comment out this line to keep the manual Y position
+            // adjustEnemyToGroundLevel(enemy, collidableObjects);
+            console.log(`Enemy ${randomType} spawned and adjusted at position:`, enemy.mesh.position);
             resolve(enemy);
         }).catch((error) => {
             console.error('Error spawning enemy:', error);
@@ -220,38 +239,16 @@ export function spawnEnemy(scene, collidableObjects, navMesh) {
     });
 }
 
-function getRandomFreePosition(navMesh) {
-    if (!navMesh || !navMesh.nodes || navMesh.nodes.length === 0) {
-        console.warn('NavMesh is not properly initialized');
-        return null;
-    }
-
-    // Obtenir tous les nœuds disponibles du NavMesh
-    const availableNodes = navMesh.nodes.filter(node => !node.occupied);
-
-    if (availableNodes.length === 0) {
-        console.warn('No free positions available in the NavMesh');
-        return null;
-    }
-
-    // Sélectionner un nœud aléatoire parmi les nœuds disponibles
-    const randomNode = availableNodes[Math.floor(Math.random() * availableNodes.length)];
-
-    // Marquer le nœud comme occupé
-    randomNode.occupied = true;
-
-    // Retourner la position du nœud sélectionné
-    return randomNode.position;
-}
-
 function adjustEnemyToGroundLevel(enemy, collidableObjects) {
-    const raycaster = new THREE.Raycaster();
-    raycaster.ray.direction.set(0, -1, 0);
-    raycaster.ray.origin.copy(enemy.mesh.position);
-    raycaster.ray.origin.y += 50; // Commencer à une hauteur élevée
+    if (!enemy.mesh) return;
 
+    const raycaster = new THREE.Raycaster(
+        enemy.mesh.position.clone().add(new THREE.Vector3(0, 50, 0)),
+        new THREE.Vector3(0, -1, 0)
+    );
     const intersects = raycaster.intersectObjects(collidableObjects);
     if (intersects.length > 0) {
         enemy.mesh.position.y = intersects[0].point.y + enemy.mesh.scale.y / 2;
     }
+    console.log(`Enemy adjusted to Y position: ${enemy.mesh.position.y}`);
 }

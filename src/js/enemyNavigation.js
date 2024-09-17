@@ -6,25 +6,27 @@ import { config } from './level.js';
 
 
 export class NavMesh {
-    constructor(maze) {
+    constructor(maze, config) {
+        console.log('Constructing NavMesh');
         this.maze = maze;
-    this.grid = this.createNavigationGrid();
-    this.nodes = this.createNodes();
-    ////console.log(`NavMesh initialized with ${this.nodes.length} nodes`);
+        this.config = config;
+        this.grid = this.createNavigationGrid();
+        this.nodes = this.createNodes();
+        console.log(`NavMesh initialized with ${this.nodes.length} nodes`);
     }
 
     createNodes() {
+        console.log('Creating NavMesh nodes');
         const nodes = [];
         for (let row = 0; row < this.maze.length; row++) {
             for (let col = 0; col < this.maze[row].length; col++) {
-                // Consider a cell walkable if it has at least one open side
                 if (!this.maze[row][col].north || !this.maze[row][col].south ||
                     !this.maze[row][col].east || !this.maze[row][col].west) {
                     nodes.push({
                         position: new THREE.Vector3(
-                            col * config.cellSize + config.cellSize / 2,
-                            1,  // Adjust height as needed
-                            row * config.cellSize + config.cellSize / 2
+                            col * this.config.cellSize + this.config.cellSize / 2,
+                            1.5,  // Adjust this value to be slightly above the floor
+                            row * this.config.cellSize + this.config.cellSize / 2
                         ),
                         row: row,
                         col: col
@@ -32,18 +34,19 @@ export class NavMesh {
                 }
             }
         }
-        //console.log(`Created ${nodes.length} nodes`);
+        console.log(`Created ${nodes.length} nodes`);
         return nodes;
     }
 
     getRandomNode() {
         if (!this.nodes || this.nodes.length === 0) {
-            //console.warn('No nodes available in NavMesh');
+            console.warn('No nodes available in NavMesh');
             return null;
         }
-        return this.nodes[Math.floor(Math.random() * this.nodes.length)];
+        const randomNode = this.nodes[Math.floor(Math.random() * this.nodes.length)];
+        console.log('Random node selected:', randomNode);
+        return randomNode;
     }
-
     createNavigationGrid() {
         const grid = [];
         for (let row = 0; row < this.maze.length; row++) {
@@ -181,7 +184,7 @@ export class NavMesh {
         return `${cell.row},${cell.col}`;
     }
 
-    cost(nodeA, nodeB) {
+    cost(nodeA, nodeB) {z 
         // Simple cost function: Euclidean distance
         return nodeA.position.distanceTo(nodeB.position);
     }

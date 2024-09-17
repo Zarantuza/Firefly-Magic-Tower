@@ -209,7 +209,9 @@ function loadLevel() {
                 characterBoundingBox,
                 debugHelpers,
                 enemies
-            ).then(() => {
+            ).then(({ stairsPosition: newStairsPosition, navMesh: newNavMesh }) => {
+                stairsPosition = newStairsPosition;
+                navMesh = newNavMesh;
                 console.log(`Nombre d'ennemis créés : ${enemies.length}`);
                 enemies.forEach((enemy, index) => {
                     console.log(`Position de l'ennemi ${index} :`, enemy.position);
@@ -219,9 +221,6 @@ function loadLevel() {
                 console.error('Erreur lors du chargement du niveau :', error);
                 reject(error);
             });
-        }, undefined, (error) => {
-            console.error('Une erreur s\'est produite lors du chargement du modèle du personnage :', error);
-            reject(error);
         });
     });
 }
@@ -276,6 +275,10 @@ function animate(composer) {
             // L'ennemi est mort, on le retire du tableau
             return false;
         }
+    });
+
+    enemies.forEach(enemy => {
+        enemy.update(delta);
     });
 
     composer.render();
@@ -446,15 +449,26 @@ function checkStairwayProximity() {
 
 
 function loadNextLevel() {
+    console.log(`Loading next level. Current level: ${currentLevel}`);
     currentLevel += 1;
     seed = generateRandomSeed();
+    console.log(`New seed generated: ${seed}`);
     updateSeedDisplay(seedDisplayElement, seed);
+    
+    console.log(`Removing ${enemies.length} enemies from previous level`);
     enemies.forEach(enemy => {
         if (enemy.mesh) {
             scene.remove(enemy.mesh);
         }
     });
     enemies = [];
+
+    console.log('Clearing collidable objects:', collidableObjects.length);
+    collidableObjects.forEach(obj => scene.remove(obj));
+    collidableObjects = [];
+
+    console.log('Creating new level');
+
     createLevel(
         scene,
         collidableObjects,
@@ -466,8 +480,22 @@ function loadNextLevel() {
         character,
         characterBoundingBox,
         debugHelpers,
-        enemies,
-    );
+        enemies
+    ).then(({ stairsPosition: newStairsPosition, navMesh: newNavMesh, enemies: newEnemies }) => {
+        stairsPosition = newStairsPosition;
+        navMesh = newNavMesh;
+        enemies = newEnemies; // Update the global enemies array
+        console.log(`Level ${currentLevel} loaded. Enemy count: ${enemies.length}`);
+        console.log('Collidable objects after level creation:', collidableObjects.length);
+        console.log('Player position:', character.position);
+        if (navMesh) {
+            console.log('NavMesh nodes:', navMesh.nodes.length);
+        } else {
+            console.warn('NavMesh is undefined after level creation');
+        }
+    }).catch(error => {
+        console.error('Error loading next level:', error);
+    });
 
     nearStairs = false;
     showStairsPrompt(false);

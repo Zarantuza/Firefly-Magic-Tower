@@ -98,6 +98,7 @@ let occupiedPositions = new Set();
 let maze = [];
 let stairsPosition = { x: 0, z: 0 };
 
+
 export async function createLevel(
     scene,
     collidableObjects,
@@ -111,7 +112,12 @@ export async function createLevel(
     debugHelpers,
     enemies
 ) {
+    console.log(`Creating level with seed: ${seed}`);
+    console.log(`Initial enemy count: ${enemies.length}`);
+    console.log(`Initial collidable objects count: ${collidableObjects.length}`);
+
     // Clear existing objects and enemies
+    console.log("Clearing previous level elements...");
     collidableObjects.forEach(obj => disposeObject(obj, scene));
     collidableObjects.length = 0;
     collisionHelpers.forEach(helper => disposeObject(helper, scene));
@@ -125,41 +131,68 @@ export async function createLevel(
     });
     enemies.length = 0;
 
+    console.log("Generating new maze...");
     generateMaze(gridRows, gridCols, seed);
+    
+    console.log("Creating maze geometry...");
     createMazeGeometry(scene, collidableObjects);
+    console.log(`Collidable objects after maze creation: ${collidableObjects.length}`);
+
+    console.log("Placing stairway...");
     stairsPosition = placeStairway(scene, collidableObjects, character);
+    console.log(`Stairway position: ${JSON.stringify(stairsPosition)}`);
+
+    console.log("Creating roof...");
     createRoof(scene, collidableObjects);
 
+    console.log("Placing items...");
     await placeItems(scene, collidableObjects, player, config, getRandomPosition);
+    console.log(`Collidable objects after item placement: ${collidableObjects.length}`);
 
+    console.log("Adding castle lights...");
     addCastleLights(scene);
 
     try {
-        // Create NavMesh
-        navMesh = new NavMesh(maze);
-        visualizeNavMesh(scene, navMesh);
+        console.log("Creating NavMesh...");
+        navMesh = new NavMesh(maze, config);
+        console.log(`NavMesh regenerated. Node count: ${navMesh.nodes.length}`);
+        //visualizeNavMesh(scene, navMesh);
 
         // Spawn new enemies
         const MAX_ENEMIES = 5;
+        console.log(`Attempting to spawn ${MAX_ENEMIES} enemies`);
         const enemyPromises = [];
         for (let i = 0; i < MAX_ENEMIES; i++) {
             enemyPromises.push(spawnEnemy(scene, collidableObjects, navMesh));
         }
 
         const newEnemies = await Promise.all(enemyPromises);
-        newEnemies.forEach(enemy => {
+        newEnemies.forEach((enemy, index) => {
             if (enemy) {
                 enemies.push(enemy);
+                console.log(`Enemy ${index} spawned at position:`, enemy.mesh.position);
+            } else {
+                console.warn(`Failed to spawn enemy ${index}`);
             }
         });
+        console.log(`Final enemy count: ${enemies.length}`);
     } catch (error) {
         console.error('Error creating NavMesh or spawning enemies:', error);
     }
+
+    console.log("Placing player...");
     placePlayer(character, characterBoundingBox);
+    console.log(`Player position after placement: ${JSON.stringify(character.position)}`);
 
-    fadeToBlack(scene, clock, () => { });
+    console.log("Fading to black...");
+    fadeToBlack(scene, clock, () => {
+        console.log("Level creation completed.");
+    });
 
-    return { stairsPosition, navMesh };
+    console.log(`Final collidable objects count: ${collidableObjects.length}`);
+    console.log(`Final enemy count: ${enemies.length}`);
+
+    return { stairsPosition, navMesh, enemies };
 }
 
 export function placePlayer(character, characterBoundingBox) {
@@ -515,6 +548,7 @@ function createFloorSegment(scene, x, z, collidableObjects, material) {
     const floor = new THREE.Mesh(floorGeometry, material);
     floor.position.set(x + config.cellSize / 2, 1 - floorThickness / 2, z + config.cellSize / 2);
     scene.add(floor);
+    console.log(`Floor segment created at (${x}, ${z}), Y position: ${floor.position.y}`);
     collidableObjects.push(floor);
 }
 
