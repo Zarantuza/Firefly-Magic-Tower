@@ -236,22 +236,22 @@ function animate(composer) {
     if (character && characterBoundingBox) {
         handlePlayerMovement(
             character,
-        characterBoundingBox,
-        keysPressed,
-        delta,
-        mixer,
-        setAction,
-        checkCollisions,
-        collidableObjects,
-        cameraPitch,
-        cameraDistance,
-        updateCameraPosition,
-        camera,
-        isJumping,
-        setIsJumping,
-        updateManaBar,
-        animationsMap,
-        isPunching
+            characterBoundingBox,
+            keysPressed,
+            delta,
+            mixer,
+            setAction,
+            checkCollisions,
+            collidableObjects,
+            cameraPitch,
+            cameraDistance,
+            updateCameraPosition,
+            camera,
+            isJumping,
+            setIsJumping,
+            updateManaBar,
+            animationsMap,
+            isPunching
         );
     }
 
@@ -277,14 +277,18 @@ function animate(composer) {
         }
     });
 
-    enemies.forEach(enemy => {
-        enemy.update(delta);
-    });
+    if (character && character.position) {
+        enemies.forEach(enemy => {
+            enemy.update(delta, character.position, player,character);  // Pass the player instance here
+        });
+    }
+    
 
     composer.render();
 
     requestAnimationFrame(() => animate(composer));
 }
+
 
 // game.js
 

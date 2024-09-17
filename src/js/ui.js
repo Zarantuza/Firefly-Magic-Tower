@@ -39,6 +39,7 @@ export function createLifeBar() {
     document.body.appendChild(lifeBarContainer);
 
     const lifeBar = document.createElement('div');
+    lifeBar.id = 'lifeBar'; // Adding an ID to the life bar for easy targeting
     lifeBar.style.width = '100%';
     lifeBar.style.height = '100%';
     lifeBar.style.backgroundColor = '#ff0000';
@@ -46,6 +47,16 @@ export function createLifeBar() {
 
     return lifeBar;
 }
+
+export function updateLifeBar(lifePercentage) {
+    const lifeBar = document.getElementById('lifeBar');  // Now targeting the life bar by its ID
+    if (lifeBar) {
+        lifeBar.style.width = `${lifePercentage * 100}%`;
+    }
+}
+
+
+
 
 export function createSeedDisplay(seed) {
     const seedDisplay = document.createElement('div');

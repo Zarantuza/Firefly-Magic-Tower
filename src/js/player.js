@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { updateManaBar, updateFireflyCounter, updateSpellUI, updateSpellSelectionBar } from './ui.js';
 import { getAvailableSpell, shootSpell } from './spells.js';
+import { updateLifeBar } from './ui.js';
+
 
 let velocityY = 0;
 const gravity = -9.8;
@@ -42,6 +44,8 @@ export class Player {
         this.currentRunSpeed = this.baseRunSpeed;
         this.speedMultiplier = 1;
         this.speedBoostEndTime = 0;
+        this.health = 100;
+        this.maxHealth = 100;
     }
 
     increaseSpeed(multiplier, duration) {
@@ -63,7 +67,23 @@ export class Player {
         this.updateSpeed();
         return isRunning ? this.currentRunSpeed : this.currentWalkSpeed;
     }
+
+    takeDamage(damage) {
+        // Reduce the player's health
+        this.health -= damage;
+        console.log(`Player took ${damage} damage. Remaining health: ${this.health}`);
+        
+        // Update the life bar based on the remaining health
+        const lifePercentage = Math.max(this.health / this.maxHealth, 0); // Ensure it's not negative
+        updateLifeBar(lifePercentage);
+        
+        if (this.health <= 0) {
+            // Logic for player's death
+            console.log('Player has died');
+        }
+    }
 }
+
 
 export function resetJump() {
     canJump = true;
@@ -236,6 +256,24 @@ export function initiateJump(character, mixer, animationsMap, setAction, isJumpi
         }
     }
 }
+
+export function takeDamage(damage) {
+    player.health -= damage;
+    console.log(`Player took ${damage} damage. Remaining health: ${player.health}`);
+
+    // Update the life bar based on the remaining health
+    const lifePercentage = Math.max(player.health / player.maxHealth, 0); // Ensure it's not negative
+    updateLifeBar(lifePercentage);  // Call to update the life bar visually
+
+    if (player.health <= 0) {
+        // Logic for player's death
+        console.log('Player has died');
+        // Handle player death logic here, e.g., respawn or game over
+    }
+}
+
+
+
 
 // player.js
 export function initiatePunch(

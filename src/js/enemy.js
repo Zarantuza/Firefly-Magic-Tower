@@ -2,10 +2,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { adjustToGroundLevel } from './utils.js';
 import { NavMesh } from './enemyNavigation.js';
+import { takeDamage } from './player.js';  // Importez la fonction takeDamage
+
+
 
 const ENEMY_SPEED = 1;
+const ENEMY_RUN_SPEED = 2;
 const MINIMUM_SPAWN_DISTANCE = 10;
 const MINIMUM_ENEMY_DISTANCE = 5;
+const CHASE_DISTANCE = 10;
+const ATTACK_DISTANCE = 1.5;
+const ATTACK_COOLDOWN = 2; // seconds
 
 const ENEMY_TYPES = {
     BASIC: {
@@ -47,6 +54,9 @@ export class Enemy {
         this.path = [];
         this.currentPathIndex = 0;
         this.isDead = false;
+        this.isChasing = false;
+        this.isAttacking = false;
+        this.lastAttackTime = 0;
     }
 
     async loadModel() {
@@ -57,9 +67,8 @@ export class Enemy {
                 this.mesh.position.copy(this.position);
                 this.mesh.scale.set(this.scale, this.scale, this.scale);
 
-                // Ajout de la rotation initiale pour orienter correctement le modèle
                 this.mesh.rotation.x = 0;
-                this.mesh.rotation.y = Math.PI; // Ajustez cette valeur si nécessaire
+                this.mesh.rotation.y = Math.PI;
                 this.mesh.rotation.z = 0;
 
                 this.mesh.traverse((child) => {
@@ -87,11 +96,9 @@ export class Enemy {
 
                 this.isLoaded = true;
 
-                // Ajustement de la position Y et appel à adjustToGroundLevel
-                this.mesh.position.y = 1; // Ajustez cette valeur selon la hauteur du sol
+                this.mesh.position.y = 1;
                 adjustToGroundLevel(this.mesh, this.collidableObjects);
 
-                // Trouver une nouvelle cible pour le déplacement
                 this.findNewTarget();
                 console.log(`Enemy of type ${this.type} loaded at position:`, this.mesh.position);
                 resolve(this);
@@ -117,15 +124,26 @@ export class Enemy {
         }
     }
 
-    update(delta) {
-        if (!this.isLoaded || !this.mesh || this.isDead) return;
-
-        
+    update(delta, playerPosition, player) {
+        if (!this.isLoaded || !this.mesh || this.isDead || !playerPosition) return;
 
         if (this.animationMixer) {
             this.animationMixer.update(delta);
         }
 
+        const distanceToPlayer = this.mesh.position.distanceTo(playerPosition);
+
+        if (distanceToPlayer <= ATTACK_DISTANCE) {
+            this.attack(delta, player);  // Passez 'player' ici
+            this.attack(delta);
+        } else if (distanceToPlayer <= CHASE_DISTANCE) {
+            this.chase(playerPosition, delta);
+        } else {
+            this.patrol(delta);
+        }
+    }
+
+    patrol(delta) {
         if (!this.path || this.currentPathIndex >= this.path.length) {
             this.findNewTarget();
         }
@@ -135,13 +153,9 @@ export class Enemy {
             const direction = new THREE.Vector3().subVectors(targetPosition, this.mesh.position).normalize();
             const movement = direction.multiplyScalar(ENEMY_SPEED * delta);
 
-            // Vérification de collision améliorée
             if (!this.checkCollision(movement)) {
                 this.mesh.position.add(movement);
-
-                // Rotation plus fluide
-                const lookAtPosition = this.mesh.position.clone().add(direction);
-                this.mesh.lookAt(lookAtPosition);
+                this.mesh.lookAt(targetPosition);
 
                 if (this.mesh.position.distanceTo(targetPosition) < 0.1) {
                     this.currentPathIndex++;
@@ -149,15 +163,62 @@ export class Enemy {
 
                 this.setAction('walk');
             } else {
-                // En cas de collision, chercher une nouvelle cible
                 this.findNewTarget();
             }
         } else {
             this.setAction('idle');
         }
-
-        console.log(`Enemy position updated: ${this.mesh.position.x}, ${this.mesh.position.y}, ${this.mesh.position.z}`);
     }
+
+    chase(playerPosition, delta) {
+        const direction = new THREE.Vector3().subVectors(playerPosition, this.mesh.position).normalize();
+        const movement = direction.multiplyScalar(ENEMY_RUN_SPEED * delta);
+
+        if (!this.checkCollision(movement)) {
+            this.mesh.position.add(movement);
+            this.mesh.lookAt(playerPosition);
+            this.setAction('run');
+        } else {
+            this.setAction('idle');
+        }
+    }
+
+    attack(delta, player) {
+        const currentTime = performance.now() / 1000;
+        if (!this.isAttacking && (currentTime - this.lastAttackTime >= ATTACK_COOLDOWN)) {
+            this.isAttacking = true;
+            this.setAction('attack'); // Play attack animation
+            this.lastAttackTime = currentTime;
+    
+            // Listen for the attack animation finish event
+            const attackAction = this.animationsMap.get('attack');
+            if (attackAction) {
+                attackAction.reset().play();
+                attackAction.clampWhenFinished = true;
+                attackAction.setLoop(THREE.LoopOnce);
+    
+                // Trigger damage during the animation
+                const attackDuration = attackAction.getClip().duration * 0.5; // Deal damage halfway through the attack animation
+                setTimeout(() => {
+                    if (player && typeof player.takeDamage === 'function') {
+                        player.takeDamage(this.damage);  // Ensure player has takeDamage method
+                        console.log(`Enemy attacks for ${this.damage} damage`);
+                    } else {
+                        console.error("Player object does not have a takeDamage method");
+                    }
+                }, attackDuration * 1000);
+    
+                // Listen for animation finish
+                attackAction.getMixer().addEventListener('finished', (event) => {
+                    if (event.action === attackAction) {
+                        this.isAttacking = false; // Allow the enemy to move again after attack animation finishes
+                    }
+                });
+            }
+        }
+    }
+    
+    
 
     checkCollision(movement) {
         const raycaster = new THREE.Raycaster(this.mesh.position, movement.clone().normalize(), 0, movement.length());
@@ -178,7 +239,7 @@ export class Enemy {
         }
 
         this.targetPosition = randomNode.position.clone();
-        this.targetPosition.y = this.mesh.position.y; // Garder la même hauteur
+        this.targetPosition.y = this.mesh.position.y;
 
         if (typeof this.navMesh.findPath === 'function') {
             this.path = this.navMesh.findPath(this.mesh.position, this.targetPosition);
@@ -189,7 +250,6 @@ export class Enemy {
             this.path = [this.targetPosition];
         }
         this.currentPathIndex = 0;
-        console.log(`New target found for enemy: ${this.targetPosition.x}, ${this.targetPosition.y}, ${this.targetPosition.z}`);
     }
 
     takeDamage(amount) {
