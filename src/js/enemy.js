@@ -12,7 +12,8 @@ const MINIMUM_SPAWN_DISTANCE = 10;
 const MINIMUM_ENEMY_DISTANCE = 5;
 const CHASE_DISTANCE = 10;
 const ATTACK_DISTANCE = 1.5;
-const ATTACK_COOLDOWN = 2; // seconds
+const ATTACK_COOLDOWN = 3; // seconds
+let enemiesKilled = 0;
 
 const ENEMY_TYPES = {
     BASIC: {
@@ -185,10 +186,19 @@ export class Enemy {
 
     attack(delta, player) {
         const currentTime = performance.now() / 1000;
-        if (!this.isAttacking && (currentTime - this.lastAttackTime >= ATTACK_COOLDOWN)) {
+    
+        // Always check if the cooldown has passed, regardless of `isAttacking` state
+        if (currentTime - this.lastAttackTime >= ATTACK_COOLDOWN) {
+            // Reset `isAttacking` to allow a new attack
+            this.isAttacking = false;
+        }
+    
+        // Proceed with attack only if not currently attacking
+        if (!this.isAttacking) {
             this.isAttacking = true;
-            this.setAction('attack'); // Play attack animation
             this.lastAttackTime = currentTime;
+    
+            this.setAction('attack'); // Play attack animation
     
             // Listen for the attack animation finish event
             const attackAction = this.animationsMap.get('attack');
@@ -208,7 +218,7 @@ export class Enemy {
                     }
                 }, attackDuration * 1000);
     
-                // Listen for animation finish
+                // Reset the attack state after the animation finishes
                 attackAction.getMixer().addEventListener('finished', (event) => {
                     if (event.action === attackAction) {
                         this.isAttacking = false; // Allow the enemy to move again after attack animation finishes
@@ -217,6 +227,7 @@ export class Enemy {
             }
         }
     }
+    
     
     
 
@@ -258,6 +269,7 @@ export class Enemy {
         if (this.health <= 0) {
             this.health = 0;
             this.die();
+            enemiesKilled += 1
         }
     }
 

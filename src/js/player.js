@@ -14,9 +14,9 @@ let currentSpeed = 0;
 const speedTransitionDuration = 0.1;
 let mana = 100;
 const maxMana = 100;
-const manaRegenRate = 100;
+const manaRegenRate = 10;
 let canJump = true;
-let fireflyCount = 1000;
+let fireflyCount = 0;
 let currentSpell = null;
 let isPunching = false; // Variable pour suivre l'état du punch
 let isJumping = false;  // Variable pour suivre l'état du saut
@@ -80,6 +80,7 @@ export class Player {
         if (this.health <= 0) {
             // Logic for player's death
             console.log('Player has died');
+            triggerGameOver();
         }
     }
 }
@@ -224,7 +225,7 @@ export function handlePlayerMovement(
         }
     }
 
-    updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
+    updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera, characterBoundingBox);
 
     // Régénération de mana au fil du temps
     mana = Math.min(mana + manaRegenRate * delta, maxMana);
@@ -258,19 +259,44 @@ export function initiateJump(character, mixer, animationsMap, setAction, isJumpi
 }
 
 export function takeDamage(damage) {
+    if (player.health <= 0) {
+        console.log('Player is already dead, no further damage can be taken.');
+        return;
+    }
+
     player.health -= damage;
     console.log(`Player took ${damage} damage. Remaining health: ${player.health}`);
 
     // Update the life bar based on the remaining health
     const lifePercentage = Math.max(player.health / player.maxHealth, 0); // Ensure it's not negative
-    updateLifeBar(lifePercentage);  // Call to update the life bar visually
+    updateLifeBar(lifePercentage);
 
     if (player.health <= 0) {
-        // Logic for player's death
         console.log('Player has died');
-        // Handle player death logic here, e.g., respawn or game over
+        //triggerGameOver();  // Trigger the game over function
     }
 }
+
+
+function triggerGameOver() {
+    //const totalTime = (performance.now() - startTime) / 1000;  // Calculate time in seconds
+    console.log('Game Over event triggered');
+    const event = new CustomEvent('gameOver', { 
+        detail: { 
+            //totalTime, 
+           // firefliesCollected, 
+            //enemiesKilled, 
+            //currentLevel 
+        } 
+    });
+    document.dispatchEvent(event);
+}
+
+
+
+
+
+
 
 
 
@@ -433,30 +459,45 @@ export function updateCameraPosition(
     cameraPitch,
     cameraDistance,
     collidableObjects,
-    camera
+    camera,
+    characterBoundingBox // Add this parameter
 ) {
     if (!character || !camera) return;
 
+    // Calculate the offset based on camera distance and pitch
     const offset = new THREE.Vector3(0, 3, -cameraDistance);
     offset.applyAxisAngle(new THREE.Vector3(1, 0, 0), cameraPitch);
 
+    // Calculate the desired camera position relative to the character's position
     const desiredCameraPosition = character.position
         .clone()
         .add(offset.applyQuaternion(character.quaternion));
+
+    // Create the direction vector for the raycaster
     const direction = desiredCameraPosition.clone().sub(character.position).normalize();
 
-    const raycaster = new THREE.Raycaster(character.position, direction);
-    const intersects = raycaster.intersectObjects(collidableObjects);
+    // Remove the player's collision box from the collidableObjects array for camera collision checks
+    const filteredCollidableObjects = collidableObjects.filter(obj => obj !== characterBoundingBox);
 
+    // Use raycasting to detect collisions between the character and the camera's desired position
+    const raycaster = new THREE.Raycaster(character.position, direction);
+    const intersects = raycaster.intersectObjects(filteredCollidableObjects);
+
+    // If there's a collision, move the camera closer to avoid clipping
     if (intersects.length > 0 && intersects[0].distance < cameraDistance) {
         const collisionPoint = intersects[0].point;
-        camera.position.copy(collisionPoint.sub(direction.multiplyScalar(0.1)));
+        camera.position.copy(collisionPoint.sub(direction.multiplyScalar(0.1))); // Slight offset to avoid exact collision point
     } else {
-        camera.position.lerp(desiredCameraPosition, 0.1);
+        // If no collision, smoothly move the camera to the desired position
+        camera.position.lerp(desiredCameraPosition, 0.1); // Smooth interpolation
     }
 
+    // Make the camera look at the character
     camera.lookAt(character.position);
 }
+
+
+
 
 export function getMana() {
     return mana;

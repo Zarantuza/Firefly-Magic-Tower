@@ -26,6 +26,7 @@ import {
     createManaBar,
     updateManaBar,
     createLifeBar,
+    updateLifeBar, 
     createSeedDisplay,
     updateSeedDisplay,
     createFireflyCounter,
@@ -46,7 +47,7 @@ import { NavMesh } from './enemyNavigation.js';
 let navMesh;
 let scene, camera, renderer, mixer, clock;
 let keysPressed = {};
-let cameraDistance = 2;
+let cameraDistance = 0;
 let cameraPitch = 0;
 let collidableObjects = [];
 let collisionHelpers = [];
@@ -74,17 +75,23 @@ let stairsPrompt = null;
 let selectedSpellIndex = 0;
 let enemies = [];
 let isRunning = false;
+let gameOverScreenCreated = false;
+let firefliesCollected = 0;
+let enemiesKilled = 0;
+
+
 
 
 const wizardCollisionBoxSize = new THREE.Vector3(0.5, 1, 0.5);
 const wizardCollisionBoxOffset = new THREE.Vector3(0, 0.5, 0);
-const maxCameraDistance = 10;
-const minCameraDistance = 3;
+const maxCameraDistance = 5;
+const minCameraDistance = 1;
 const stairwayTriggerDistance = 3;
 let verticalCorrection = 0.25;
 let shootSourceHeight = 1.0;
-let minCameraPitch = -Math.PI / 4;
-let maxCameraPitch = Math.PI / 4;
+const minCameraPitch = -Math.PI / 2;  // Looking straight down
+const maxCameraPitch = Math.PI / 2;   // Looking straight up
+
 
 let isLoading = false;
 let controlsEnabled = false;
@@ -99,6 +106,89 @@ function init() {
         });
     }
 }
+
+function createGameOverScreen() {
+    const gameOverScreen = document.createElement('div');
+    gameOverScreen.id = 'gameOverScreen';
+    gameOverScreen.style.position = 'absolute';
+    gameOverScreen.style.top = '50%';
+    gameOverScreen.style.left = '50%';
+    gameOverScreen.style.transform = 'translate(-50%, -50%)';
+    gameOverScreen.style.color = '#ffffff';
+    gameOverScreen.style.fontSize = '48px';
+    gameOverScreen.style.padding = '20px';
+    gameOverScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    gameOverScreen.style.borderRadius = '5px';
+    gameOverScreen.style.textAlign = 'center';
+    gameOverScreen.style.display = 'none';  // Hidden initially
+
+    const statsDiv = document.createElement('div');
+    statsDiv.id = 'gameStats';  // This div will hold the game stats
+    statsDiv.style.fontSize = '24px';
+    statsDiv.style.marginTop = '20px';
+
+    gameOverScreen.appendChild(statsDiv);
+
+    const restartButton = document.createElement('button');
+    restartButton.innerText = 'Restart';
+    restartButton.style.marginTop = '20px';
+    restartButton.style.fontSize = '24px';
+    restartButton.style.cursor = 'pointer';
+    restartButton.addEventListener('click', restartGame);  // Attach restart function
+
+    gameOverScreen.appendChild(restartButton);
+    document.body.appendChild(gameOverScreen);
+
+    gameOverScreenCreated = true;
+}
+
+
+function showGameOverScreen(visible) {
+    if (!gameOverScreenCreated) {
+        createGameOverScreen();  // Ensure the screen is created
+    }
+
+    const gameOverScreen = document.getElementById('gameOverScreen');
+
+    if (gameOverScreen) {
+        // Don't populate stats for now
+        gameOverScreen.style.display = visible ? 'block' : 'none';
+    } else {
+        console.error("Game over screen element not found");
+    }
+}
+
+
+
+
+
+function restartGame() {
+    // Reset player health and other game-related variables
+    player.health = player.maxHealth;
+    firefliesCollected = 0;
+    enemiesKilled = 0;
+    
+    updateLifeBar(1);  // Life bar should show full health
+    loadLevel();  // Re-load the level or reset game state as needed
+    
+    controlsEnabled = true;  // Re-enable player controls
+    showGameOverScreen(false);  // Hide the game over screen
+    startGame();  // Restart the game loop
+}
+
+
+
+
+
+// Listen for the custom "gameOver" event from player.js
+// Listen for the custom "gameOver" event from player.js
+document.addEventListener('gameOver', (event) => {
+    controlsEnabled = false;  // Disable player controls
+    const { totalTime } = event.detail;  // Get the total time from the event
+    showGameOverScreen(true, totalTime);  // Show the game over screen with stats
+});
+
+
 
 
 
@@ -164,6 +254,7 @@ function startGame() {
     window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
 }
 
+
 function loadLevel() {
     return new Promise((resolve, reject) => {
         // Charger les assets, créer le niveau, etc.
@@ -228,12 +319,15 @@ function loadLevel() {
 
 
 function animate(composer) {
-    if (!controlsEnabled) return; // Arrête l'animation si les contrôles ne sont pas activés
+    if (!controlsEnabled) return; // Stops animation when controls are disabled (e.g., after game over)
 
     const delta = clock.getDelta();
 
+    // Update character animations
     if (mixer) mixer.update(delta);
-    if (character && characterBoundingBox) {
+
+    if (character && characterBoundingBox && controlsEnabled) {
+        // Handle character movement
         handlePlayerMovement(
             character,
             characterBoundingBox,
@@ -255,39 +349,68 @@ function animate(composer) {
         );
     }
 
+    // Handle spell animations
     spellAnimations = spellAnimations.filter(spellAnimation => spellAnimation(delta));
 
+    // Check proximity to stairway and collectibles
     checkStairwayProximity();
     checkCollisionsForCollectibles(character, collidableObjects);
 
+    // Update the mana bar, selected spells, and the UI
     updateManaBar(manaBarElement, getMana() / getMaxMana());
     currentSpell = getAvailableSpell(getFireflyCount());
     const selectedSpell = selectedSpellIndex === 0 ? null : spells[selectedSpellIndex - 1];
     updateSpellUI(selectedSpell, getFireflyCount());
     updateSpellSelectionBar(getFireflyCount());
 
-    // Mise à jour des ennemis existants
-    enemies = enemies.filter(enemy => {
-        if (!enemy.isDead) {
-            enemy.update(delta);
-            return true;
-        } else {
-            // L'ennemi est mort, on le retire du tableau
-            return false;
-        }
-    });
-
-    if (character && character.position) {
-        enemies.forEach(enemy => {
-            enemy.update(delta, character.position, player,character);  // Pass the player instance here
+    // Update enemy states
+    if (controlsEnabled) {
+        enemies = enemies.filter(enemy => {
+            if (!enemy.isDead) {
+                enemy.update(delta);
+                return true;
+            }
+            return false; // Remove dead enemies
         });
     }
-    
 
+    // Enemies update (e.g., pursuing the player)
+    if (character && character.position && controlsEnabled) {
+        enemies.forEach(enemy => {
+            enemy.update(delta, character.position, player, character);
+        });
+    }
+
+    // FPS Mode: Update camera to stay at character's position and rotate based on mouse movement
+    if (isFPSMode) {
+        // In FPS mode, position the camera at the character's head (or eye level)
+        camera.position.copy(character.position);
+        camera.position.y += shootSourceHeight; // Adjust to character's height (eye level)
+    } else {
+        // Third-person mode: Update camera position to follow behind the character
+        updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
+    }
+
+    // Render the scene
     composer.render();
 
+    // Request the next frame
     requestAnimationFrame(() => animate(composer));
 }
+
+
+function rotateCameraInFPS(event) {
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+
+    // Rotate the camera based on mouse movement
+    camera.rotation.y -= movementX * 0.002; // Horizontal rotation
+    camera.rotation.x -= movementY * 0.002; // Vertical rotation
+
+    // Limit camera pitch to avoid over-rotation (e.g., looking too far up or down)
+    camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x, -Math.PI / 2, Math.PI / 2);
+}
+
 
 
 // game.js
@@ -391,8 +514,10 @@ document.addEventListener('keyup', (event) => {
 document.addEventListener('mousemove', (event) => {
     if (!controlsEnabled) return;
     if (isFPSMode) {
+        // FPS mode: rotate the camera based on mouse movement
         updateCameraRotation(event);
     } else {
+        // Third-person mode: move the camera around the character
         onMouseMove(character, cameraPitch, cameraDistance, (char, pitch, distance) => {
             cameraPitch = pitch;
             updateCameraPosition(char, pitch, distance, collidableObjects, camera);
@@ -400,28 +525,53 @@ document.addEventListener('mousemove', (event) => {
     }
 });
 
+
 document.addEventListener('wheel', (event) => {
     if (!controlsEnabled) return;
+
+    // Adjust cameraDistance based on mouse wheel scroll (deltaY)
     cameraDistance += event.deltaY * 0.01;
+
+    // Clamp the cameraDistance between min and max distances
     cameraDistance = THREE.MathUtils.clamp(cameraDistance, minCameraDistance, maxCameraDistance);
+
+    // Update the camera position based on the new distance and current pitch
     updateCameraPosition(character, cameraPitch, cameraDistance, collidableObjects, camera);
 });
+
+
 
 document.addEventListener('mousedown', (event) => {
     if (!controlsEnabled) return;
     if (event.button === 0) {
         castSelectedSpell();
-    } else if (event.button === 2) {
-        toggleFPSMode(true);
+    }
+    // Toggle FPS mode with right-click (button 2)
+    if (event.button === 2) {
+        toggleFPSMode(!isFPSMode);
     }
 });
 
-document.addEventListener('mouseup', (event) => {
-    if (!controlsEnabled) return;
-    if (event.button === 2) {
-        toggleFPSMode(false);
+function toggleFPSMode(enable) {
+    isFPSMode = enable;
+
+    if (enable) {
+        // Switch to FPS mode: place camera at character's head height
+        camera.position.copy(character.position);
+        camera.position.y += shootSourceHeight; // Adjust height to character's eye level
+
+        character.visible = false; // Hide character in FPS mode
+        document.addEventListener('mousemove', rotateCameraInFPS); // Start tracking mouse movement
+    } else {
+        // Switch back to third-person mode: reset camera behind character
+        character.visible = true;
+        camera.position.set(0, 3, -cameraDistance); // Set the camera behind the character
+        document.removeEventListener('mousemove', rotateCameraInFPS); // Stop tracking mouse movement
     }
-});
+}
+
+
+
 
 document.addEventListener('click', () => {
     if (!controlsEnabled) return;
@@ -429,13 +579,13 @@ document.addEventListener('click', () => {
 });
 
 document.addEventListener('pointerlockchange', () => {
-    if (!controlsEnabled) return;
     if (document.pointerLockElement === renderer.domElement) {
         document.addEventListener('mousemove', onMouseMove);
     } else {
         document.removeEventListener('mousemove', onMouseMove);
     }
 });
+
 
 function checkStairwayProximity() {
     if (!stairsPosition || !character) return;
@@ -575,23 +725,16 @@ function updateCameraRotation(event) {
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
 
+    // Update camera yaw (left-right rotation)
     camera.rotation.y -= movementX * 0.002;
+
+    // Update camera pitch (up-down rotation) and clamp to prevent over-rotation
     camera.rotation.x -= movementY * 0.002;
     camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x, minCameraPitch, maxCameraPitch);
 }
 
-function toggleFPSMode(enable) {
-    isFPSMode = enable;
 
-    if (enable) {
-        camera.position.copy(character.position);
-        camera.position.y += shootSourceHeight;
-        character.visible = false;
-    } else {
-        character.visible = true;
-        camera.position.set(0, 3, -cameraDistance);
-    }
-}
+
 
 function toggleCollisionBoxes() {
     collisionBoxVisible = !collisionBoxVisible;
