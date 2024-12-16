@@ -30,7 +30,7 @@ To clone and run the **Firefly Magic Tower** locally, follow these steps:
 1. Clone the repository from GitHub:
 
    ```bash
-   git clone https://github.com/your-username/firefly-magic-tower.git
+   git clone https://github.com/Zarantuza/firefly-magic-tower.git
 
 2. Navigate into the project directory:
    ```bash
